@@ -2,7 +2,7 @@ services:
   piano:
     build: .
     ports:
-      - "8080:8080"
+      - "4444:8080"
     volumes:
       - piano_data:/app/data
       - piano_backups:/backups
