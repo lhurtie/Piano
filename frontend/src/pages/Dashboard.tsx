@@ -160,8 +160,7 @@ export default function Dashboard() {
           }
           if (needsSave) saveReachedMilestones(reached)
         }
-      })
-      .then((d) => {
+
         setManualHours({
           self: String(d.self_experience_hours),
           theorie: String(d.theorie_hours),
