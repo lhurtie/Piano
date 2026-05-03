@@ -31,21 +31,17 @@ export default function Finance() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="card flex flex-col items-center justify-center text-center py-5">
-          <div className="text-2xl font-bold text-emerald-600">{totalIncome.toFixed(2)} €</div>
-          <div className="text-sm text-slate-500 mt-1">Gesamteinnahmen</div>
-        </div>
-        <div className="card flex flex-col items-center justify-center text-center py-5">
-          <div className="text-2xl font-bold text-red-600">{totalCosts.toFixed(2)} €</div>
-          <div className="text-sm text-slate-500 mt-1">Gesamtkosten</div>
-        </div>
-        <div className="card flex flex-col items-center justify-center text-center py-5">
-          <div className={`text-2xl font-bold ${totalNet >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
-            {totalNet.toFixed(2)} €
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: 'Gesamteinnahmen', value: `${totalIncome.toFixed(2)} €`, color: 'text-emerald-600' },
+          { label: 'Gesamtkosten', value: `${totalCosts.toFixed(2)} €`, color: 'text-red-600' },
+          { label: 'Netto gesamt', value: `${totalNet.toFixed(2)} €`, color: totalNet >= 0 ? 'text-blue-600' : 'text-red-600' },
+        ].map(({ label, value, color }) => (
+          <div key={label} className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col items-center justify-center text-center min-h-[80px]">
+            <div className={`text-xl font-bold leading-tight ${color}`}>{value}</div>
+            <div className="text-xs text-slate-500 mt-1">{label}</div>
           </div>
-          <div className="text-sm text-slate-500 mt-1">Netto gesamt</div>
-        </div>
+        ))}
       </div>
 
       {/* Tabs */}

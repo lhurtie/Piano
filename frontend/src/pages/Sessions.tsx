@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Trash2, Search, Edit2, FileText, Archive } from 'lucide-react'
+import { Plus, Trash2, Search, Edit2, FileText, Archive, X } from 'lucide-react'
 import { sessionsApi, patientsApi, settingsApi, exportApi } from '../api'
 import type { Session, Patient, Settings } from '../types'
 import { addRipple, delay } from '../utils/juice'
@@ -9,6 +9,30 @@ const PHASE_COLORS: Record<string, string> = {
   'KZT1': 'badge-blue',
   'KZT2': 'badge-purple',
   'LZT': 'badge-green',
+}
+
+function downloadFilteredCsv(sessions: Session[]) {
+  const BOM = '﻿'
+  const header = ['ID', 'Patient', 'Datum', 'Typ', 'Phase', 'Nr.', 'Dauer (Min)', 'Honorar (EUR)', 'Notizen'].join(';')
+  const rows = sessions.map((s) => [
+    s.id,
+    s.patient_chiffre ?? '',
+    new Date(s.date).toLocaleDateString('de-DE'),
+    s.session_type ?? '',
+    s.phase ?? '',
+    s.session_number ?? '',
+    s.duration_minutes ?? '',
+    s.revenue_amount.toFixed(2).replace('.', ','),
+    (s.notes ?? '').replace(/[\n\r;]/g, ' '),
+  ].join(';'))
+  const csv = BOM + [header, ...rows].join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `piano_sitzungen_${new Date().toISOString().slice(0, 10)}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 interface SessionFormProps {
@@ -41,7 +65,9 @@ function SessionFormModal({ patients, settings, initial, onClose, onSaved }: Ses
   const [patientId, setPatientId] = useState(initialPid)
   const [date, setDate] = useState(initial?.date ?? today)
   const [sessionType, setSessionType] = useState(initialType)
-  const [duration, setDuration] = useState(String(initial?.duration_minutes ?? '50'))
+  const [duration, setDuration] = useState(
+    initial?.duration_minutes != null ? String(initial.duration_minutes) : '50'
+  )
   const [notes, setNotes] = useState(initial?.notes ?? '')
   const [revenue, setRevenue] = useState(
     initial?.revenue_amount !== undefined
@@ -77,7 +103,7 @@ function SessionFormModal({ patients, settings, initial, onClose, onSaved }: Ses
         patient_id: parseInt(patientId),
         date,
         session_type: sessionType,
-        duration_minutes: duration ? parseInt(duration) : undefined,
+        duration_minutes: duration !== '' ? parseInt(duration) : 50,
         notes: notes || undefined,
         revenue_amount: parseFloat(revenue),
       }
@@ -143,7 +169,7 @@ function SessionFormModal({ patients, settings, initial, onClose, onSaved }: Ses
               <label className="label">Datum *</label>
               <input
                 type="date"
-                className="input input-juice"
+                className="input input-juice w-full"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 required
@@ -278,13 +304,14 @@ export default function Sessions() {
   const [settings, setSettings] = useState<Settings | null>(null)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [editSession, setEditSession] = useState<Session | null>(null)
   const [deleteSession, setDeleteSession] = useState<Session | null>(null)
   const [newSessionId, setNewSessionId] = useState<number | null>(null)
   const [collapsingId, setCollapsingId] = useState<number | null>(null)
   const [exportingPdf, setExportingPdf] = useState(false)
-  const [exportingCsv, setExportingCsv] = useState(false)
 
   useEffect(() => {
     Promise.all([
@@ -298,14 +325,20 @@ export default function Sessions() {
     }).finally(() => setLoading(false))
   }, [])
 
-  const filtered = sessions.filter((s) =>
-    !search ||
-    s.patient_chiffre?.toLowerCase().includes(search.toLowerCase()) ||
-    s.phase?.toLowerCase().includes(search.toLowerCase()) ||
-    s.session_type?.toLowerCase().includes(search.toLowerCase()),
-  )
+  const filtered = sessions.filter((s) => {
+    if (
+      search &&
+      !s.patient_chiffre?.toLowerCase().includes(search.toLowerCase()) &&
+      !s.phase?.toLowerCase().includes(search.toLowerCase()) &&
+      !s.session_type?.toLowerCase().includes(search.toLowerCase())
+    ) return false
+    if (fromDate && s.date < fromDate) return false
+    if (toDate && s.date > toDate) return false
+    return true
+  })
 
   const totalRevenue = filtered.reduce((sum, s) => sum + s.revenue_amount, 0)
+  const hasDateFilter = !!(fromDate || toDate)
 
   const handleDeleted = async (id: number) => {
     setCollapsingId(id)
@@ -321,7 +354,9 @@ export default function Sessions() {
         <div>
           <h1 className="text-xl font-bold text-slate-900">Sitzungen</h1>
           <p className="text-sm text-slate-500 mt-0.5">
-            {sessions.length} Sitzungen · {totalRevenue.toFixed(2)} € gesamt
+            {filtered.length !== sessions.length
+              ? `${filtered.length} von ${sessions.length} Sitzungen · ${totalRevenue.toFixed(2)} € gefiltert`
+              : `${sessions.length} Sitzungen · ${totalRevenue.toFixed(2)} € gesamt`}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -333,11 +368,11 @@ export default function Sessions() {
             <FileText size={14} /> {exportingPdf ? '...' : 'PDF'}
           </button>
           <button
-            onClick={async () => { setExportingCsv(true); try { await exportApi.downloadSessionsCsv() } finally { setExportingCsv(false) } }}
-            disabled={exportingCsv}
+            onClick={() => downloadFilteredCsv(filtered)}
             className="btn-secondary btn-juice ripple-container text-sm gap-1.5"
+            title={hasDateFilter ? `${filtered.length} gefilterte Sitzungen exportieren` : 'Alle Sitzungen exportieren'}
           >
-            <Archive size={14} /> {exportingCsv ? '...' : 'CSV'}
+            <Archive size={14} /> CSV{hasDateFilter ? ` (${filtered.length})` : ''}
           </button>
           <button
             onClick={(e) => { addRipple(e); setShowModal(true) }}
@@ -348,14 +383,45 @@ export default function Sessions() {
         </div>
       </div>
 
-      <div className="relative max-w-sm">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-        <input
-          className="input input-juice pl-9"
-          placeholder="Patient, Phase oder Typ suchen..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      {/* Filters */}
+      <div className="flex flex-wrap gap-3 items-center">
+        <div className="relative flex-1 min-w-[180px] max-w-sm">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            className="input input-juice pl-9"
+            placeholder="Patient, Phase oder Typ..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-slate-500 whitespace-nowrap">Von</span>
+          <input
+            type="date"
+            className="input text-sm"
+            style={{ width: 'auto' }}
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+          />
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-slate-500 whitespace-nowrap">Bis</span>
+          <input
+            type="date"
+            className="input text-sm"
+            style={{ width: 'auto' }}
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+          />
+        </div>
+        {hasDateFilter && (
+          <button
+            onClick={() => { setFromDate(''); setToDate('') }}
+            className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-700 transition-colors"
+          >
+            <X size={12} /> Filter löschen
+          </button>
+        )}
       </div>
 
       <div className="table-container bg-white overflow-x-auto">

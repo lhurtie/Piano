@@ -262,7 +262,7 @@ export default function Dashboard() {
       </div>
 
       {/* Progress toggle + ring */}
-      <div className="card p-4">
+      <div className={`card p-4 transition-all duration-300 ${view === 'ambulanz' ? 'ring-2 ring-blue-400' : 'ring-2 ring-violet-400'}`}>
         <div className="flex flex-col items-center gap-3 mb-4">
           <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900 self-start">
             <TrendingUp size={18} className="text-blue-500" />
@@ -330,9 +330,8 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Manual hours quick-entry (Gesamtausbildung only) */}
-      {view === 'gesamt' && (
-        <div className="card p-4">
+      {/* Manual hours quick-entry */}
+      <div className="card p-4">
           <h2 className="text-base font-semibold text-slate-900 mb-3 flex items-center gap-2">
             <Save size={16} className="text-emerald-500" />
             Stunden eintragen
@@ -393,7 +392,6 @@ export default function Dashboard() {
             {savingHours ? '...' : 'Speichern'}
           </button>
         </div>
-      )}
 
       {/* Prognosis + Financial */}
       <div className="grid md:grid-cols-2 gap-4">
