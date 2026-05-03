@@ -26,19 +26,34 @@ function SupervisionFormModal({
   const today = new Date().toISOString().slice(0, 10)
   const [supervisorId, setSupervisorId] = useState(String(initial?.supervisor_id ?? supervisors[0]?.id ?? ''))
   const [date, setDate] = useState(initial?.date ?? today)
-  const [duration, setDuration] = useState(String(initial?.duration_minutes ?? '50'))
   const [type, setType] = useState<SupervisionType>(initial?.type ?? 'Einzel')
+  const [duration, setDuration] = useState(String(initial?.duration_minutes ?? (initial?.type === 'Gruppe' ? '90' : '45')))
   const [cost, setCost] = useState(
-    initial ? String(initial.cost) : String(defaultCostEinzel)
+    initial ? String(initial.cost) : String(Math.round((45 / 45) * defaultCostEinzel * 100) / 100)
   )
   const [notes, setNotes] = useState(initial?.notes ?? '')
   const [selectedPatients, setSelectedPatients] = useState<number[]>(initial?.patient_ids ?? [])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  // Auto-calculate cost for Einzel based on duration (110€ per 45 min unit)
+  useEffect(() => {
+    if (isEdit) return
+    const mins = parseInt(duration) || 0
+    if (type === 'Einzel') {
+      setCost(String(Math.round((mins / 45) * defaultCostEinzel * 100) / 100))
+    } else {
+      setCost(String(defaultCostGruppe))
+    }
+  }, [duration, type])
+
   const handleTypeChange = (t: SupervisionType) => {
     setType(t)
-    setCost(t === 'Einzel' ? String(defaultCostEinzel) : String(defaultCostGruppe))
+    if (!isEdit) {
+      if (t === 'Einzel') {
+        setDuration('45')
+      }
+    }
   }
 
   const togglePatient = (pid: number) => {
@@ -410,6 +425,8 @@ export default function SupervisionPage() {
   const totalCost = supervisions.reduce((sum, s) => sum + s.cost, 0)
   const einzelCount = supervisions.filter((s) => s.type === 'Einzel').length
   const gruppeCount = supervisions.filter((s) => s.type === 'Gruppe').length
+  const einzelHours = Math.round(supervisions.filter((s) => s.type === 'Einzel').reduce((sum, s) => sum + s.duration_minutes, 0) / 60 * 10) / 10
+  const gruppeHours = Math.round(supervisions.filter((s) => s.type === 'Gruppe').reduce((sum, s) => sum + s.duration_minutes, 0) / 60 * 10) / 10
 
   useEffect(() => {
     Promise.all([
@@ -432,9 +449,7 @@ export default function SupervisionPage() {
         <div>
           <h1 className="text-xl font-bold text-slate-900">Supervision</h1>
           <p className="text-sm text-slate-500 mt-0.5">
-            {supervisions.length} Supervisionen · Einzel: {einzelCount} · Gruppe: {gruppeCount} ·{' '}
-            {Math.round((totalMinutes / 60) * 10) / 10} Std. ·{' '}
-            {totalCost.toFixed(2)} € Kosten
+            Einzel: {einzelHours} / 37.5 Std. · Gruppe: {gruppeHours} / 75 Std. · {totalCost.toFixed(2)} € Kosten
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

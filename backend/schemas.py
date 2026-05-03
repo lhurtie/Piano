@@ -194,6 +194,8 @@ class DashboardData(BaseModel):
     total_supervision_einzel: int
     total_supervision_gruppe: int
     total_supervision_minutes: int
+    total_supervision_einzel_hours: float
+    total_supervision_gruppe_hours: float
     # Manual hours
     self_experience_hours: float
     theorie_hours: float
@@ -202,8 +204,8 @@ class DashboardData(BaseModel):
     self_experience_enabled: bool
     # Targets
     target_therapy_sessions: int
-    target_supervision_einzel: int
-    target_supervision_gruppe: int
+    target_supervision_einzel: float
+    target_supervision_gruppe: float
     target_self_experience: int
     target_theorie: int
     target_pt1: int

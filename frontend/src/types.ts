@@ -51,6 +51,8 @@ export interface DashboardData {
   total_supervision_einzel: number
   total_supervision_gruppe: number
   total_supervision_minutes: number
+  total_supervision_einzel_hours: number
+  total_supervision_gruppe_hours: number
   // Manual hours
   self_experience_hours: number
   theorie_hours: number

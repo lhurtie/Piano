@@ -133,41 +133,42 @@ export const settingsApi = {
     request<{ message: string }>('PATCH', '/settings', data),
 }
 
+function downloadBlob(blob: Blob, filename: string) {
+  const blobUrl = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = blobUrl
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(blobUrl)
+}
+
+async function fetchBlob(path: string): Promise<Blob> {
+  const token = getToken()
+  const res = await fetch(`${BASE_URL}${path}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.blob()
+}
+
 // Export - these open downloads
 export const exportApi = {
-  downloadPdf: () => {
-    const token = getToken()
-    const url = `${BASE_URL}/export/pdf`
-    const a = document.createElement('a')
-    a.href = url
-    // Can't set Authorization header via anchor tag, so we'll use fetch
-    fetch(url, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((r) => r.blob())
-      .then((blob) => {
-        const blobUrl = URL.createObjectURL(blob)
-        a.href = blobUrl
-        a.download = `piano_export_${new Date().toISOString().slice(0, 10)}.pdf`
-        a.click()
-        URL.revokeObjectURL(blobUrl)
-      })
-  },
-  downloadCsv: () => {
-    const token = getToken()
-    fetch(`${BASE_URL}/export/csv`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((r) => r.blob())
-      .then((blob) => {
-        const blobUrl = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = blobUrl
-        a.download = `piano_export_${new Date().toISOString().slice(0, 10)}.zip`
-        a.click()
-        URL.revokeObjectURL(blobUrl)
-      })
-  },
+  downloadPdf: () =>
+    fetchBlob('/export/pdf').then((b) =>
+      downloadBlob(b, `piano_export_${new Date().toISOString().slice(0, 10)}.pdf`),
+    ),
+  downloadCsv: () =>
+    fetchBlob('/export/csv').then((b) =>
+      downloadBlob(b, `piano_export_${new Date().toISOString().slice(0, 10)}.zip`),
+    ),
+  downloadPatientPdf: (patientId: number, chiffre: string) =>
+    fetchBlob(`/export/patient/${patientId}/pdf`).then((b) =>
+      downloadBlob(b, `piano_patient_${chiffre}_${new Date().toISOString().slice(0, 10)}.pdf`),
+    ),
+  downloadPatientCsv: (patientId: number, chiffre: string) =>
+    fetchBlob(`/export/patient/${patientId}/csv`).then((b) =>
+      downloadBlob(b, `piano_patient_${chiffre}_${new Date().toISOString().slice(0, 10)}.zip`),
+    ),
 }
 
 // Backup

@@ -134,8 +134,8 @@ export default function Dashboard() {
 
           const areas: Array<{ key: string; label: string; value: number; target: number }> = [
             { key: 'therapy', label: 'Therapiesitzungen', value: d.total_sessions, target: d.target_therapy_sessions },
-            { key: 'sup_einzel', label: 'Supervision Einzel', value: d.total_supervision_einzel, target: d.target_supervision_einzel },
-            { key: 'sup_gruppe', label: 'Supervision Gruppe', value: d.total_supervision_gruppe, target: d.target_supervision_gruppe },
+            { key: 'sup_einzel', label: 'Supervision Einzel', value: d.total_supervision_einzel_hours, target: d.target_supervision_einzel },
+            { key: 'sup_gruppe', label: 'Supervision Gruppe', value: d.total_supervision_gruppe_hours, target: d.target_supervision_gruppe },
             { key: 'self_exp', label: 'Selbsterfahrung', value: d.self_experience_hours, target: d.target_self_experience },
             { key: 'theorie', label: 'Theorie', value: d.theorie_hours, target: d.target_theorie },
             { key: 'pt1', label: 'PT1', value: d.pt1_hours, target: d.target_pt1 },
@@ -238,21 +238,21 @@ export default function Dashboard() {
 
       {/* Progress toggle + ring */}
       <div className="card p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-          <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900">
+        <div className="flex flex-col items-center gap-3 mb-4">
+          <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900 self-start">
             <TrendingUp size={18} className="text-blue-500" />
             Deine Fortschritte
           </h2>
-          <div className="flex rounded-lg border border-slate-200 overflow-hidden">
+          <div className="flex rounded-xl border border-slate-200 overflow-hidden shadow-sm">
             <button
               onClick={() => setView('ambulanz')}
-              className={`px-3 py-1.5 text-sm font-medium transition-colors ${view === 'ambulanz' ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+              className={`px-5 py-2 text-sm font-semibold transition-all duration-200 ${view === 'ambulanz' ? 'bg-blue-600 text-white shadow-inner' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
             >
               Ambulanz
             </button>
             <button
               onClick={() => setView('gesamt')}
-              className={`px-3 py-1.5 text-sm font-medium transition-colors ${view === 'gesamt' ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+              className={`px-5 py-2 text-sm font-semibold transition-all duration-200 ${view === 'gesamt' ? 'bg-blue-600 text-white shadow-inner' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
             >
               Gesamtausbildung
             </button>
@@ -266,55 +266,24 @@ export default function Dashboard() {
           </div>
 
           {/* Individual bars */}
-          <div className="flex-1 space-y-3 w-full">
-            <ProgressBar
-              label="Therapiesitzungen"
-              value={data.total_sessions}
-              max={data.target_therapy_sessions}
-              color="bg-blue-500"
-            />
-            <ProgressBar
-              label="Supervision Einzel"
-              value={data.total_supervision_einzel}
-              max={data.target_supervision_einzel}
-              color="bg-violet-500"
-            />
-            <ProgressBar
-              label="Supervision Gruppe"
-              value={data.total_supervision_gruppe}
-              max={data.target_supervision_gruppe}
-              color="bg-purple-500"
-            />
-            {data.self_experience_enabled && (
-              <ProgressBar
-                label="Selbsterfahrung"
-                value={data.self_experience_hours}
-                max={data.target_self_experience}
-                color="bg-emerald-500"
-                unit=" Std."
-              />
-            )}
-            <ProgressBar
-              label="Theorie"
-              value={data.theorie_hours}
-              max={data.target_theorie}
-              color="bg-teal-500"
-              unit=" Std."
-            />
-            <ProgressBar
-              label="PT1"
-              value={data.pt1_hours}
-              max={data.target_pt1}
-              color="bg-orange-500"
-              unit=" Std."
-            />
-            <ProgressBar
-              label="PT2"
-              value={data.pt2_hours}
-              max={data.target_pt2}
-              color="bg-red-500"
-              unit=" Std."
-            />
+          <div className="flex-1 space-y-2.5 w-full">
+            {/* Ambulanz-Bereich */}
+            <div className={`space-y-2.5 rounded-xl p-3 transition-all duration-300 ${view === 'ambulanz' || view === 'gesamt' ? 'ring-2 ring-blue-200 bg-blue-50/50' : ''}`}>
+              <div className="text-xs font-semibold text-blue-600 uppercase tracking-wide">Ambulanz</div>
+              <ProgressBar label="Therapiesitzungen" value={data.total_sessions} max={data.target_therapy_sessions} color="bg-blue-500" />
+              <ProgressBar label="Supervision Einzel" value={Math.round(data.total_supervision_einzel_hours * 10) / 10} max={data.target_supervision_einzel} color="bg-violet-500" unit=" Std." />
+              <ProgressBar label="Supervision Gruppe" value={Math.round(data.total_supervision_gruppe_hours * 10) / 10} max={data.target_supervision_gruppe} color="bg-purple-500" unit=" Std." />
+            </div>
+            {/* Gesamtausbildung-Bereich */}
+            <div className={`space-y-2.5 rounded-xl p-3 transition-all duration-300 ${view === 'gesamt' ? 'ring-2 ring-emerald-200 bg-emerald-50/50' : 'opacity-60'}`}>
+              <div className="text-xs font-semibold text-emerald-600 uppercase tracking-wide">Gesamtausbildung</div>
+              {data.self_experience_enabled && (
+                <ProgressBar label="Selbsterfahrung" value={data.self_experience_hours} max={data.target_self_experience} color="bg-emerald-500" unit=" Std." />
+              )}
+              <ProgressBar label="Theorie" value={data.theorie_hours} max={data.target_theorie} color="bg-teal-500" unit=" Std." />
+              <ProgressBar label="PT1" value={data.pt1_hours} max={data.target_pt1} color="bg-orange-500" unit=" Std." />
+              <ProgressBar label="PT2" value={data.pt2_hours} max={data.target_pt2} color="bg-red-500" unit=" Std." />
+            </div>
           </div>
         </div>
       </div>

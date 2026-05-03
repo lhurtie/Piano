@@ -9,8 +9,8 @@ import schemas
 
 DEFAULT_SETTINGS = {
     "target_therapy_sessions": "600",
-    "target_supervision_einzel": "50",
-    "target_supervision_gruppe": "100",
+    "target_supervision_einzel": "37.5",   # hours (was "50" sessions)
+    "target_supervision_gruppe": "75",     # hours (was "100" sessions)
     "target_self_experience": "120",
     "target_theorie": "600",
     "target_pt1": "1200",
@@ -295,8 +295,8 @@ def get_dashboard_data(db: Session) -> schemas.DashboardData:
     settings = get_all_settings(db)
 
     target_sessions = int(settings.get("target_therapy_sessions") or "600")
-    target_sup_einzel = int(settings.get("target_supervision_einzel") or "50")
-    target_sup_gruppe = int(settings.get("target_supervision_gruppe") or "100")
+    target_sup_einzel = float(settings.get("target_supervision_einzel") or "37.5")
+    target_sup_gruppe = float(settings.get("target_supervision_gruppe") or "75")
     target_self_exp = int(settings.get("target_self_experience") or "120")
     target_theorie = int(settings.get("target_theorie") or "600")
     target_pt1 = int(settings.get("target_pt1") or "1200")
@@ -322,6 +322,9 @@ def get_dashboard_data(db: Session) -> schemas.DashboardData:
     total_supervision_einzel = sum(1 for s in all_supervisions if s.type == SVType.EINZEL)
     total_supervision_gruppe = sum(1 for s in all_supervisions if s.type == SVType.GRUPPE)
     total_supervision_minutes = sum(s.duration_minutes for s in all_supervisions)
+    # Supervision progress in hours
+    total_supervision_einzel_hours = sum(s.duration_minutes for s in all_supervisions if s.type == SVType.EINZEL) / 60.0
+    total_supervision_gruppe_hours = sum(s.duration_minutes for s in all_supervisions if s.type == SVType.GRUPPE) / 60.0
 
     # Prognosis: avg sessions per month over last 3 months
     # Only count sessions from patients who were NOT abgeschlossen in that month
@@ -379,14 +382,14 @@ def get_dashboard_data(db: Session) -> schemas.DashboardData:
     )
 
     # Progress calculations
-    def pct(value: float, target: int) -> float:
+    def pct(value: float, target: float) -> float:
         if target <= 0:
             return 0.0
         return min(100.0, (value / target) * 100.0)
 
     therapy_pct = pct(total_sessions, target_sessions)
-    sup_einzel_pct = pct(total_supervision_einzel, target_sup_einzel)
-    sup_gruppe_pct = pct(total_supervision_gruppe, target_sup_gruppe)
+    sup_einzel_pct = pct(total_supervision_einzel_hours, target_sup_einzel)
+    sup_gruppe_pct = pct(total_supervision_gruppe_hours, target_sup_gruppe)
     self_exp_pct = pct(self_exp_hours, target_self_exp) if self_exp_enabled else 0.0
     theorie_pct = pct(theorie_hours, target_theorie)
     pt1_pct = pct(pt1_hours, target_pt1)
@@ -408,6 +411,8 @@ def get_dashboard_data(db: Session) -> schemas.DashboardData:
         total_supervision_einzel=total_supervision_einzel,
         total_supervision_gruppe=total_supervision_gruppe,
         total_supervision_minutes=total_supervision_minutes,
+        total_supervision_einzel_hours=round(total_supervision_einzel_hours, 2),
+        total_supervision_gruppe_hours=round(total_supervision_gruppe_hours, 2),
         self_experience_hours=self_exp_hours,
         theorie_hours=theorie_hours,
         pt1_hours=pt1_hours,

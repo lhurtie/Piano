@@ -320,3 +320,223 @@ def export_csv(
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.get("/patient/{patient_id}/pdf")
+def export_patient_pdf(
+    patient_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    patient = db.query(Patient).filter(Patient.id == patient_id).first()
+    if not patient:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Patient nicht gefunden")
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=2 * cm,
+        leftMargin=2 * cm,
+        topMargin=2 * cm,
+        bottomMargin=2 * cm,
+    )
+
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        "Title", parent=styles["Title"],
+        fontSize=18, spaceAfter=12, textColor=colors.HexColor("#1e3a5f")
+    )
+    heading_style = ParagraphStyle(
+        "Heading", parent=styles["Heading2"],
+        fontSize=13, spaceAfter=8, spaceBefore=14, textColor=colors.HexColor("#1e3a5f")
+    )
+    body_style = styles["Normal"]
+
+    elements = []
+
+    # Title
+    elements.append(Paragraph(f"Piano – Patient: {patient.chiffre}", title_style))
+    elements.append(Paragraph(f"Exportiert am {format_date(date.today())}", body_style))
+    elements.append(Spacer(1, 0.4 * cm))
+    elements.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#1e3a5f")))
+    elements.append(Spacer(1, 0.4 * cm))
+
+    # Patient info
+    elements.append(Paragraph("Patienteninfo", heading_style))
+    info_data = [
+        ["Chiffre", patient.chiffre],
+        ["Status", patient.status.value],
+        ["Erstellt", format_date(patient.created_at)],
+        ["Antrag gesendet", format_date(patient.antrag_gesendet_datum)],
+        ["Antrag genehmigt", format_date(patient.antrag_genehmigt_datum)],
+    ]
+    info_table = Table(info_data, colWidths=[5 * cm, 10 * cm])
+    info_table.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 10),
+        ("ROWBACKGROUNDS", (0, 0), (-1, -1), [colors.white, colors.HexColor("#f0f4f8")]),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cbd5e1")),
+        ("PADDING", (0, 0), (-1, -1), 6),
+    ]))
+    elements.append(info_table)
+    elements.append(Spacer(1, 0.4 * cm))
+
+    # Sessions for this patient
+    elements.append(Paragraph(f"Therapiesitzungen ({len(patient.sessions)})", heading_style))
+    patient_sessions = db.query(SessionModel).filter(
+        SessionModel.patient_id == patient_id
+    ).order_by(SessionModel.date.asc()).all()
+
+    session_data = [["#", "Datum", "Phase", "Dauer (Min)", "Honorar", "Notizen"]]
+    total_revenue = 0.0
+    for i, s in enumerate(patient_sessions, 1):
+        phase = crud.get_phase_for_session_number(i)
+        session_data.append([
+            str(i),
+            format_date(s.date),
+            phase,
+            str(s.duration_minutes) if s.duration_minutes else "",
+            format_currency(s.revenue_amount),
+            (s.notes or "")[:50],
+        ])
+        total_revenue += s.revenue_amount
+
+    if len(session_data) > 1:
+        st = Table(session_data, colWidths=[1 * cm, 3 * cm, 2.5 * cm, 3 * cm, 3 * cm, 4.5 * cm])
+        st.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1e3a5f")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 9),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f0f4f8")]),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cbd5e1")),
+            ("PADDING", (0, 0), (-1, -1), 5),
+        ]))
+        elements.append(st)
+    else:
+        elements.append(Paragraph("Keine Sitzungen vorhanden.", body_style))
+    elements.append(Spacer(1, 0.4 * cm))
+
+    # Supervisions for this patient
+    all_supervisions = db.query(Supervision).all()
+    patient_supervisions = [s for s in all_supervisions if any(p.id == patient_id for p in s.patients)]
+
+    elements.append(Paragraph(f"Verknüpfte Supervisionen ({len(patient_supervisions)})", heading_style))
+    if patient_supervisions:
+        sup_data = [["Datum", "Supervisor", "Typ", "Dauer (Min)", "Kosten"]]
+        for s in patient_supervisions:
+            supervisor = db.query(Supervisor).filter(Supervisor.id == s.supervisor_id).first()
+            sup_data.append([
+                format_date(s.date),
+                supervisor.name if supervisor else "",
+                s.type.value,
+                str(s.duration_minutes),
+                format_currency(s.cost),
+            ])
+        sut = Table(sup_data, colWidths=[3 * cm, 4 * cm, 2.5 * cm, 3.5 * cm, 3 * cm])
+        sut.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1e3a5f")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 9),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f0f4f8")]),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cbd5e1")),
+            ("PADDING", (0, 0), (-1, -1), 5),
+        ]))
+        elements.append(sut)
+    else:
+        elements.append(Paragraph("Keine verknüpften Supervisionen.", body_style))
+    elements.append(Spacer(1, 0.4 * cm))
+
+    # Financial summary for this patient
+    elements.append(Paragraph("Finanzübersicht", heading_style))
+    fin_summary = [
+        ["Gesamteinnahmen", format_currency(total_revenue)],
+        ["Anzahl Sitzungen", str(len(patient_sessions))],
+    ]
+    if len(patient_sessions) > 0:
+        fin_summary.append(["Ø Honorar pro Sitzung", format_currency(total_revenue / len(patient_sessions))])
+    ft = Table(fin_summary, colWidths=[7 * cm, 7 * cm])
+    ft.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 10),
+        ("ROWBACKGROUNDS", (0, 0), (-1, -1), [colors.white, colors.HexColor("#f0f4f8")]),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cbd5e1")),
+        ("PADDING", (0, 0), (-1, -1), 6),
+    ]))
+    elements.append(ft)
+
+    doc.build(elements)
+    buffer.seek(0)
+
+    filename = f"patient_{patient.chiffre}_{date.today().strftime('%Y-%m-%d')}.pdf"
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/patient/{patient_id}/csv")
+def export_patient_csv(
+    patient_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    patient = db.query(Patient).filter(Patient.id == patient_id).first()
+    if not patient:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Patient nicht gefunden")
+
+    zip_buffer = io.BytesIO()
+
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        # Sessions CSV for this patient
+        sessions_buf = io.StringIO()
+        writer = csv.writer(sessions_buf)
+        writer.writerow(["id", "patient_chiffre", "datum", "phase", "sitzungsnummer", "dauer_minuten", "honorar", "notizen"])
+        patient_sessions = db.query(SessionModel).filter(
+            SessionModel.patient_id == patient_id
+        ).order_by(SessionModel.date.asc()).all()
+        for i, s in enumerate(patient_sessions, 1):
+            phase = crud.get_phase_for_session_number(i)
+            writer.writerow([
+                s.id,
+                patient.chiffre,
+                format_date(s.date),
+                phase,
+                i,
+                s.duration_minutes or "",
+                f"{s.revenue_amount:.2f}",
+                s.notes or "",
+            ])
+        zf.writestr("sessions.csv", sessions_buf.getvalue())
+
+        # Supervisions CSV for this patient
+        sup_buf = io.StringIO()
+        writer = csv.writer(sup_buf)
+        writer.writerow(["id", "datum", "supervisor", "typ", "dauer_minuten", "kosten", "notizen"])
+        all_supervisions = db.query(Supervision).order_by(Supervision.date.asc()).all()
+        for s in all_supervisions:
+            if any(p.id == patient_id for p in s.patients):
+                supervisor = db.query(Supervisor).filter(Supervisor.id == s.supervisor_id).first()
+                writer.writerow([
+                    s.id,
+                    format_date(s.date),
+                    supervisor.name if supervisor else "",
+                    s.type.value,
+                    s.duration_minutes,
+                    f"{s.cost:.2f}",
+                    s.notes or "",
+                ])
+        zf.writestr("supervisions.csv", sup_buf.getvalue())
+
+    zip_buffer.seek(0)
+    filename = f"patient_{patient.chiffre}_{date.today().strftime('%Y-%m-%d')}.zip"
+    return StreamingResponse(
+        zip_buffer,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

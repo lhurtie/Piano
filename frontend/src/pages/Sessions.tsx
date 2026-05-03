@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Plus, Trash2, Search, Edit2 } from 'lucide-react'
 import { sessionsApi, patientsApi, settingsApi } from '../api'
 import type { Session, Patient, Settings } from '../types'
+import { addRipple, delay } from '../utils/juice'
 
 const PHASE_COLORS: Record<string, string> = {
   'Probatorik': 'badge-amber',
@@ -39,6 +40,7 @@ function SessionFormModal({ patients, settings, initial, onClose, onSaved }: Ses
   )
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState(false)
 
   const handleTypeChange = (t: string) => {
     setSessionType(t)
@@ -65,6 +67,8 @@ function SessionFormModal({ patients, settings, initial, onClose, onSaved }: Ses
       } else {
         session = await sessionsApi.create(payload)
       }
+      setSuccess(true)
+      await delay(250)
       onSaved(session)
     } catch (err: any) {
       setError(err.message)
@@ -75,7 +79,7 @@ function SessionFormModal({ patients, settings, initial, onClose, onSaved }: Ses
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+      <div className={`modal-content${success ? ' success-flash' : ''}`} onClick={(e) => e.stopPropagation()}>
         <div className="p-6">
           <h2 className="mb-5">{isEdit ? 'Sitzung bearbeiten' : 'Neue Sitzung'}</h2>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -83,7 +87,7 @@ function SessionFormModal({ patients, settings, initial, onClose, onSaved }: Ses
               <div>
                 <label className="label">Patient *</label>
                 <select
-                  className="input"
+                  className="input input-juice"
                   value={patientId}
                   onChange={(e) => setPatientId(e.target.value)}
                   required
@@ -104,8 +108,8 @@ function SessionFormModal({ patients, settings, initial, onClose, onSaved }: Ses
                   <button
                     key={t}
                     type="button"
-                    onClick={() => handleTypeChange(t)}
-                    className={`flex-1 py-2 text-sm font-medium transition-colors ${
+                    onClick={(e) => { addRipple(e); handleTypeChange(t) }}
+                    className={`btn-juice ripple-container flex-1 py-2 text-sm font-medium transition-colors ${
                       sessionType === t
                         ? 'bg-blue-600 text-white'
                         : 'bg-white text-slate-700 hover:bg-slate-50'
@@ -120,7 +124,7 @@ function SessionFormModal({ patients, settings, initial, onClose, onSaved }: Ses
               <label className="label">Datum *</label>
               <input
                 type="date"
-                className="input"
+                className="input input-juice"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 required
@@ -130,7 +134,7 @@ function SessionFormModal({ patients, settings, initial, onClose, onSaved }: Ses
               <label className="label">Dauer (Minuten)</label>
               <input
                 type="number"
-                className="input"
+                className="input input-juice"
                 placeholder="50"
                 value={duration}
                 onChange={(e) => setDuration(e.target.value)}
@@ -141,7 +145,7 @@ function SessionFormModal({ patients, settings, initial, onClose, onSaved }: Ses
               <label className="label">Honorar (€)</label>
               <input
                 type="number"
-                className="input"
+                className="input input-juice"
                 step="0.01"
                 value={revenue}
                 onChange={(e) => setRevenue(e.target.value)}
@@ -151,7 +155,7 @@ function SessionFormModal({ patients, settings, initial, onClose, onSaved }: Ses
             <div>
               <label className="label">Notizen</label>
               <textarea
-                className="input resize-none"
+                className="input input-juice resize-none"
                 rows={3}
                 placeholder="Optionale Notizen..."
                 value={notes}
@@ -164,10 +168,15 @@ function SessionFormModal({ patients, settings, initial, onClose, onSaved }: Ses
               </div>
             )}
             <div className="flex gap-3 pt-2">
-              <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">
+              <button type="button" onClick={onClose} className="btn-secondary btn-juice ripple-container flex-1 justify-center" onMouseDown={addRipple}>
                 Abbrechen
               </button>
-              <button type="submit" disabled={loading} className="btn-primary flex-1 justify-center">
+              <button
+                type="submit"
+                disabled={loading}
+                className="btn-primary btn-juice ripple-container flex-1 justify-center"
+                onMouseDown={addRipple}
+              >
                 {loading ? '...' : isEdit ? 'Speichern' : 'Hinzufügen'}
               </button>
             </div>
@@ -210,8 +219,11 @@ function DeleteConfirmModal({ session, onClose, onDeleted }: DeleteConfirmProps)
                 Sitzung vom {new Date(session.date).toLocaleDateString('de-DE')} ({session.patient_chiffre})
               </p>
               <div className="flex gap-3">
-                <button onClick={onClose} className="btn-secondary flex-1 justify-center">Abbrechen</button>
-                <button onClick={() => setStep(2)} className="btn-primary flex-1 justify-center bg-red-600 hover:bg-red-700">
+                <button onClick={onClose} className="btn-secondary btn-juice ripple-container flex-1 justify-center" onMouseDown={addRipple}>Abbrechen</button>
+                <button
+                  onClick={(e) => { addRipple(e); setStep(2) }}
+                  className="btn-primary btn-juice ripple-container flex-1 justify-center bg-red-600 hover:bg-red-700"
+                >
                   Löschen
                 </button>
               </div>
@@ -224,11 +236,11 @@ function DeleteConfirmModal({ session, onClose, onDeleted }: DeleteConfirmProps)
                 Die Sitzung wird endgültig gelöscht. Bist du sicher?
               </p>
               <div className="flex gap-3">
-                <button onClick={onClose} className="btn-secondary flex-1 justify-center">Abbrechen</button>
+                <button onClick={onClose} className="btn-secondary btn-juice ripple-container flex-1 justify-center" onMouseDown={addRipple}>Abbrechen</button>
                 <button
-                  onClick={handleFinalDelete}
+                  onClick={(e) => { addRipple(e); handleFinalDelete() }}
                   disabled={loading}
-                  className="btn-primary flex-1 justify-center bg-red-600 hover:bg-red-700"
+                  className="btn-primary btn-juice ripple-container flex-1 justify-center bg-red-600 hover:bg-red-700"
                 >
                   {loading ? '...' : 'Endgültig löschen'}
                 </button>
@@ -250,6 +262,8 @@ export default function Sessions() {
   const [showModal, setShowModal] = useState(false)
   const [editSession, setEditSession] = useState<Session | null>(null)
   const [deleteSession, setDeleteSession] = useState<Session | null>(null)
+  const [newSessionId, setNewSessionId] = useState<number | null>(null)
+  const [collapsingId, setCollapsingId] = useState<number | null>(null)
 
   useEffect(() => {
     Promise.all([
@@ -272,6 +286,14 @@ export default function Sessions() {
 
   const totalRevenue = filtered.reduce((sum, s) => sum + s.revenue_amount, 0)
 
+  const handleDeleted = async (id: number) => {
+    setCollapsingId(id)
+    await delay(350)
+    setSessions((prev) => prev.filter((s) => s.id !== id))
+    setCollapsingId(null)
+    setDeleteSession(null)
+  }
+
   return (
     <div className="space-y-5 pb-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -281,7 +303,10 @@ export default function Sessions() {
             {sessions.length} Sitzungen · {totalRevenue.toFixed(2)} € gesamt
           </p>
         </div>
-        <button onClick={() => setShowModal(true)} className="btn-primary">
+        <button
+          onClick={(e) => { addRipple(e); setShowModal(true) }}
+          className="btn-primary btn-juice ripple-container"
+        >
           <Plus size={16} /> Neue Sitzung
         </button>
       </div>
@@ -289,7 +314,7 @@ export default function Sessions() {
       <div className="relative max-w-sm">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
         <input
-          className="input pl-9"
+          className="input input-juice pl-9"
           placeholder="Patient, Phase oder Typ suchen..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -320,7 +345,16 @@ export default function Sessions() {
             </thead>
             <tbody>
               {filtered.map((s) => (
-                <tr key={s.id}>
+                <tr
+                  key={s.id}
+                  className={
+                    collapsingId === s.id
+                      ? 'collapsing'
+                      : newSessionId === s.id
+                      ? 'slide-in-up'
+                      : ''
+                  }
+                >
                   <td className="font-medium whitespace-nowrap">{new Date(s.date).toLocaleDateString('de-DE')}</td>
                   <td>
                     <span className="font-mono text-slate-900">{s.patient_chiffre}</span>
@@ -346,15 +380,15 @@ export default function Sessions() {
                   <td>
                     <div className="flex items-center gap-1">
                       <button
-                        onClick={() => setEditSession(s)}
-                        className="p-1 text-slate-400 hover:text-blue-600 transition-colors"
+                        onClick={(e) => { addRipple(e); setEditSession(s) }}
+                        className="p-1 text-slate-400 hover:text-blue-600 transition-colors btn-juice ripple-container"
                         title="Bearbeiten"
                       >
                         <Edit2 size={14} />
                       </button>
                       <button
-                        onClick={() => setDeleteSession(s)}
-                        className="p-1 text-slate-400 hover:text-red-600 transition-colors"
+                        onClick={(e) => { addRipple(e); setDeleteSession(s) }}
+                        className="p-1 text-slate-400 hover:text-red-600 transition-colors btn-juice ripple-container"
                         title="Löschen"
                       >
                         <Trash2 size={14} />
@@ -375,6 +409,8 @@ export default function Sessions() {
           onClose={() => setShowModal(false)}
           onSaved={(s) => {
             setSessions((prev) => [s, ...prev])
+            setNewSessionId(s.id)
+            setTimeout(() => setNewSessionId(null), 1000)
             setShowModal(false)
           }}
         />
@@ -397,10 +433,7 @@ export default function Sessions() {
         <DeleteConfirmModal
           session={deleteSession}
           onClose={() => setDeleteSession(null)}
-          onDeleted={(id) => {
-            setSessions((prev) => prev.filter((s) => s.id !== id))
-            setDeleteSession(null)
-          }}
+          onDeleted={handleDeleted}
         />
       )}
     </div>
