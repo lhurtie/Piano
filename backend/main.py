@@ -24,18 +24,39 @@ os.makedirs("/backups", exist_ok=True)
 # Create tables
 Base.metadata.create_all(bind=engine)
 
-# Migrate: add session_type column if missing (SQLite doesn't support ALTER TABLE via SQLAlchemy auto)
+# SQLite column migrations
 from sqlalchemy import text
 with engine.connect() as conn:
-    try:
-        conn.execute(text("ALTER TABLE sessions ADD COLUMN session_type TEXT NOT NULL DEFAULT 'Einzelsitzung'"))
-        conn.commit()
-    except Exception:
-        pass  # Column already exists
+    for stmt in [
+        "ALTER TABLE sessions ADD COLUMN session_type TEXT NOT NULL DEFAULT 'Einzelsitzung'",
+        "ALTER TABLE patients ADD COLUMN phase_override TEXT",
+    ]:
+        try:
+            conn.execute(text(stmt))
+            conn.commit()
+        except Exception:
+            pass  # Column already exists
 
 # Seed default settings
 with SessionLocal() as db:
     crud.seed_settings(db)
+
+# Correct old default values that changed between versions
+from models import Setting
+_corrections = {
+    "target_therapy_sessions": ("100", "600"),
+    "target_self_experience": ("100", "120"),
+    "target_supervision_einzel": ("50", "37.5"),
+    "target_supervision_gruppe": ("100", "75"),
+    "default_cost_einzel": ("90", "110"),
+    "default_cost_gruppe": ("40", "0"),
+}
+with SessionLocal() as db:
+    for key, (old_val, new_val) in _corrections.items():
+        s = db.query(Setting).filter(Setting.key == key, Setting.value == old_val).first()
+        if s:
+            s.value = new_val
+    db.commit()
 
 
 @asynccontextmanager

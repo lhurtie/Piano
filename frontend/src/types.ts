@@ -9,6 +9,7 @@ export interface Patient {
   antrag_gesendet_datum: string | null
   antrag_genehmigt_datum: string | null
   session_count: number
+  phase_override: string | null
 }
 
 export interface Session {

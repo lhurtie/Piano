@@ -169,6 +169,10 @@ export const exportApi = {
     fetchBlob(`/export/patient/${patientId}/csv`).then((b) =>
       downloadBlob(b, `piano_patient_${chiffre}_${new Date().toISOString().slice(0, 10)}.zip`),
     ),
+  downloadSessionsCsv: () =>
+    fetchBlob('/export/sessions/csv').then((b) =>
+      downloadBlob(b, `piano_sitzungen_${new Date().toISOString().slice(0, 10)}.csv`),
+    ),
 }
 
 // Backup

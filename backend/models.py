@@ -52,6 +52,7 @@ class Patient(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     antrag_gesendet_datum = Column(Date, nullable=True)
     antrag_genehmigt_datum = Column(Date, nullable=True)
+    phase_override = Column(String, nullable=True)
 
     sessions = relationship("Session", back_populates="patient", cascade="all, delete-orphan")
     supervisions = relationship("Supervision", secondary=supervision_patients, back_populates="patients")

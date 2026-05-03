@@ -106,6 +106,7 @@ function PatientDetailSheet({ patient, onUpdated, onDeleted, onClose }: PatientD
   const [loadingSessions, setLoadingSessions] = useState(true)
   const [status, setStatus] = useState<PatientStatus>(patient.status)
   const [savingStatus, setSavingStatus] = useState(false)
+  const [phaseOverride, setPhaseOverride] = useState<string>(patient.phase_override ?? '')
   const [deleteStep, setDeleteStep] = useState(0)
   const [deletingPatient, setDeletingPatient] = useState(false)
   const [exportLoading, setExportLoading] = useState<'pdf' | 'csv' | null>(null)
@@ -125,6 +126,12 @@ function PatientDetailSheet({ patient, onUpdated, onDeleted, onClose }: PatientD
     } finally {
       setSavingStatus(false)
     }
+  }
+
+  const handlePhaseOverride = async (val: string) => {
+    setPhaseOverride(val)
+    const updated = await patientsApi.update(patient.id, { phase_override: val || null } as any)
+    onUpdated(updated)
   }
 
   const handleDelete = async () => {
@@ -177,6 +184,22 @@ function PatientDetailSheet({ patient, onUpdated, onDeleted, onClose }: PatientD
           <option value="Probatorik">Probatorik</option>
           <option value="Therapie laufend">Therapie laufend</option>
           <option value="Therapie abgeschlossen">Therapie abgeschlossen</option>
+        </select>
+      </div>
+
+      {/* Phase override */}
+      <div>
+        <label className="label">Phase manuell setzen (überschreibt Auto-Berechnung)</label>
+        <select
+          className="input"
+          value={phaseOverride}
+          onChange={(e) => handlePhaseOverride(e.target.value)}
+        >
+          <option value="">Auto (aus Sitzungsnummer)</option>
+          <option value="Probatorik">Probatorik</option>
+          <option value="KZT1">KZT1</option>
+          <option value="KZT2">KZT2</option>
+          <option value="LZT">LZT</option>
         </select>
       </div>
 

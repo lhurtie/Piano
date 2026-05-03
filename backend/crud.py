@@ -151,6 +151,15 @@ def create_session(db: Session, data: schemas.SessionCreate) -> schemas.SessionO
     db.add(session)
     db.commit()
     db.refresh(session)
+
+    # Auto-update patient status Probatorik → Therapie laufend at 5th session
+    patient = db.query(Patient).filter(Patient.id == session.patient_id).first()
+    if patient and patient.status == PatientStatus.PROBATORIK:
+        count = db.query(SessionModel).filter(SessionModel.patient_id == patient.id).count()
+        if count >= 5:
+            patient.status = PatientStatus.LAUFEND
+            db.commit()
+
     return enrich_session(session, db)
 
 

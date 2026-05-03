@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Plus, Trash2, Search, Edit2 } from 'lucide-react'
-import { sessionsApi, patientsApi, settingsApi } from '../api'
+import { Plus, Trash2, Search, Edit2, FileText, Archive } from 'lucide-react'
+import { sessionsApi, patientsApi, settingsApi, exportApi } from '../api'
 import type { Session, Patient, Settings } from '../types'
 import { addRipple, delay } from '../utils/juice'
 
@@ -28,19 +28,38 @@ function SessionFormModal({ patients, settings, initial, onClose, onSaved }: Ses
     return settings.default_revenue_einzel || '45.80'
   }
 
-  const [patientId, setPatientId] = useState(String(initial?.patient_id ?? patients[0]?.id ?? ''))
+  const getDefaultTypeForPatient = (pid: string) => {
+    if (isEdit) return initial?.session_type ?? 'Einzelsitzung'
+    const p = patients.find((p) => String(p.id) === pid)
+    if (!p) return 'Einzelsitzung'
+    return (p.session_count + 1) <= 4 ? 'Probatorik' : 'Einzelsitzung'
+  }
+
+  const initialPid = String(initial?.patient_id ?? patients[0]?.id ?? '')
+  const initialType = initial?.session_type ?? getDefaultTypeForPatient(initialPid)
+
+  const [patientId, setPatientId] = useState(initialPid)
   const [date, setDate] = useState(initial?.date ?? today)
-  const [sessionType, setSessionType] = useState(initial?.session_type ?? 'Einzelsitzung')
-  const [duration, setDuration] = useState(String(initial?.duration_minutes ?? ''))
+  const [sessionType, setSessionType] = useState(initialType)
+  const [duration, setDuration] = useState(String(initial?.duration_minutes ?? '50'))
   const [notes, setNotes] = useState(initial?.notes ?? '')
   const [revenue, setRevenue] = useState(
     initial?.revenue_amount !== undefined
       ? String(initial.revenue_amount)
-      : getDefaultRevenue('Einzelsitzung')
+      : getDefaultRevenue(initialType)
   )
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+
+  const handlePatientChange = (pid: string) => {
+    setPatientId(pid)
+    if (!isEdit) {
+      const newType = getDefaultTypeForPatient(pid)
+      setSessionType(newType)
+      setRevenue(getDefaultRevenue(newType))
+    }
+  }
 
   const handleTypeChange = (t: string) => {
     setSessionType(t)
@@ -89,7 +108,7 @@ function SessionFormModal({ patients, settings, initial, onClose, onSaved }: Ses
                 <select
                   className="input input-juice"
                   value={patientId}
-                  onChange={(e) => setPatientId(e.target.value)}
+                  onChange={(e) => handlePatientChange(e.target.value)}
                   required
                 >
                   <option value="">Patient auswählen...</option>
@@ -264,6 +283,8 @@ export default function Sessions() {
   const [deleteSession, setDeleteSession] = useState<Session | null>(null)
   const [newSessionId, setNewSessionId] = useState<number | null>(null)
   const [collapsingId, setCollapsingId] = useState<number | null>(null)
+  const [exportingPdf, setExportingPdf] = useState(false)
+  const [exportingCsv, setExportingCsv] = useState(false)
 
   useEffect(() => {
     Promise.all([
@@ -303,12 +324,28 @@ export default function Sessions() {
             {sessions.length} Sitzungen · {totalRevenue.toFixed(2)} € gesamt
           </p>
         </div>
-        <button
-          onClick={(e) => { addRipple(e); setShowModal(true) }}
-          className="btn-primary btn-juice ripple-container"
-        >
-          <Plus size={16} /> Neue Sitzung
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={async () => { setExportingPdf(true); try { await exportApi.downloadPdf() } finally { setExportingPdf(false) } }}
+            disabled={exportingPdf}
+            className="btn-secondary btn-juice ripple-container text-sm gap-1.5"
+          >
+            <FileText size={14} /> {exportingPdf ? '...' : 'PDF'}
+          </button>
+          <button
+            onClick={async () => { setExportingCsv(true); try { await exportApi.downloadSessionsCsv() } finally { setExportingCsv(false) } }}
+            disabled={exportingCsv}
+            className="btn-secondary btn-juice ripple-container text-sm gap-1.5"
+          >
+            <Archive size={14} /> {exportingCsv ? '...' : 'CSV'}
+          </button>
+          <button
+            onClick={(e) => { addRipple(e); setShowModal(true) }}
+            className="btn-primary btn-juice ripple-container"
+          >
+            <Plus size={16} /> Neue Sitzung
+          </button>
+        </div>
       </div>
 
       <div className="relative max-w-sm">

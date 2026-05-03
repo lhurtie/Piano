@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { TrendingUp, Users, BookOpen, Euro, Calendar, Plus, ArrowRight, Clock } from 'lucide-react'
-import { dashboardApi } from '../api'
+import { TrendingUp, Users, BookOpen, Euro, Calendar, Plus, ArrowRight, Clock, Save } from 'lucide-react'
+import { dashboardApi, settingsApi } from '../api'
 import type { DashboardData } from '../types'
 import { triggerCelebration, triggerMilestone } from '../utils/celebration'
 
@@ -112,6 +112,8 @@ export default function Dashboard() {
   const [error, setError] = useState('')
   const [view, setView] = useState<'ambulanz' | 'gesamt'>('ambulanz')
   const checkedMilestones = useRef(false)
+  const [manualHours, setManualHours] = useState({ self: '', theorie: '', pt1: '', pt2: '' })
+  const [savingHours, setSavingHours] = useState(false)
 
   useEffect(() => {
     dashboardApi.get()
@@ -159,6 +161,14 @@ export default function Dashboard() {
           if (needsSave) saveReachedMilestones(reached)
         }
       })
+      .then((d) => {
+        setManualHours({
+          self: String(d.self_experience_hours),
+          theorie: String(d.theorie_hours),
+          pt1: String(d.pt1_hours),
+          pt2: String(d.pt2_hours),
+        })
+      })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
   }, [])
@@ -183,6 +193,22 @@ export default function Dashboard() {
   const supHours = Math.round((data.total_supervision_minutes / 60) * 10) / 10
   const progressValue = view === 'ambulanz' ? data.ambulanz_progress : data.gesamt_progress
   const progressLabel = view === 'ambulanz' ? 'Ambulanz-Fortschritt' : 'Gesamtausbildung'
+
+  const saveManualHours = async () => {
+    setSavingHours(true)
+    try {
+      await settingsApi.update({
+        self_experience_hours: manualHours.self || '0',
+        theorie_hours: manualHours.theorie || '0',
+        pt1_hours: manualHours.pt1 || '0',
+        pt2_hours: manualHours.pt2 || '0',
+      })
+      const refreshed = await dashboardApi.get()
+      setData(refreshed)
+    } finally {
+      setSavingHours(false)
+    }
+  }
 
   return (
     <div className="space-y-5 pb-6">
@@ -266,27 +292,109 @@ export default function Dashboard() {
           </div>
 
           {/* Individual bars */}
-          <div className="flex-1 space-y-2.5 w-full">
-            {/* Ambulanz-Bereich */}
-            <div className={`space-y-2.5 rounded-xl p-3 transition-all duration-300 ${view === 'ambulanz' || view === 'gesamt' ? 'ring-2 ring-blue-200 bg-blue-50/50' : ''}`}>
-              <div className="text-xs font-semibold text-blue-600 uppercase tracking-wide">Ambulanz</div>
-              <ProgressBar label="Therapiesitzungen" value={data.total_sessions} max={data.target_therapy_sessions} color="bg-blue-500" />
-              <ProgressBar label="Supervision Einzel" value={Math.round(data.total_supervision_einzel_hours * 10) / 10} max={data.target_supervision_einzel} color="bg-violet-500" unit=" Std." />
-              <ProgressBar label="Supervision Gruppe" value={Math.round(data.total_supervision_gruppe_hours * 10) / 10} max={data.target_supervision_gruppe} color="bg-purple-500" unit=" Std." />
-            </div>
-            {/* Gesamtausbildung-Bereich */}
-            <div className={`space-y-2.5 rounded-xl p-3 transition-all duration-300 ${view === 'gesamt' ? 'ring-2 ring-emerald-200 bg-emerald-50/50' : 'opacity-60'}`}>
-              <div className="text-xs font-semibold text-emerald-600 uppercase tracking-wide">Gesamtausbildung</div>
-              {data.self_experience_enabled && (
-                <ProgressBar label="Selbsterfahrung" value={data.self_experience_hours} max={data.target_self_experience} color="bg-emerald-500" unit=" Std." />
-              )}
-              <ProgressBar label="Theorie" value={data.theorie_hours} max={data.target_theorie} color="bg-teal-500" unit=" Std." />
-              <ProgressBar label="PT1" value={data.pt1_hours} max={data.target_pt1} color="bg-orange-500" unit=" Std." />
-              <ProgressBar label="PT2" value={data.pt2_hours} max={data.target_pt2} color="bg-red-500" unit=" Std." />
-            </div>
+          <div className="flex-1 w-full">
+            {view === 'gesamt' ? (
+              /* Gesamtausbildung: all areas in one unified frame */
+              <div className="ring-2 ring-blue-300 rounded-2xl bg-gradient-to-b from-blue-50/60 to-emerald-50/40 p-4 space-y-3">
+                <div className="text-xs font-bold text-blue-700 uppercase tracking-wider">Gesamtausbildung — alle Bereiche</div>
+                <ProgressBar label="Therapiesitzungen" value={data.total_sessions} max={data.target_therapy_sessions} color="bg-blue-500" />
+                <ProgressBar label="Supervision Einzel" value={Math.round(data.total_supervision_einzel_hours * 10) / 10} max={data.target_supervision_einzel} color="bg-violet-500" unit=" Std." />
+                <ProgressBar label="Supervision Gruppe" value={Math.round(data.total_supervision_gruppe_hours * 10) / 10} max={data.target_supervision_gruppe} color="bg-purple-500" unit=" Std." />
+                {data.self_experience_enabled && (
+                  <ProgressBar label="Selbsterfahrung" value={data.self_experience_hours} max={data.target_self_experience} color="bg-emerald-500" unit=" Std." />
+                )}
+                <ProgressBar label="Theorie" value={data.theorie_hours} max={data.target_theorie} color="bg-teal-500" unit=" Std." />
+                <ProgressBar label="PT1" value={data.pt1_hours} max={data.target_pt1} color="bg-orange-500" unit=" Std." />
+                <ProgressBar label="PT2" value={data.pt2_hours} max={data.target_pt2} color="bg-red-500" unit=" Std." />
+              </div>
+            ) : (
+              /* Ambulanz: only ambulanz areas highlighted */
+              <div className="space-y-2.5">
+                <div className="ring-2 ring-blue-200 bg-blue-50/50 rounded-xl p-3 space-y-2.5">
+                  <div className="text-xs font-semibold text-blue-600 uppercase tracking-wide">Ambulanz</div>
+                  <ProgressBar label="Therapiesitzungen" value={data.total_sessions} max={data.target_therapy_sessions} color="bg-blue-500" />
+                  <ProgressBar label="Supervision Einzel" value={Math.round(data.total_supervision_einzel_hours * 10) / 10} max={data.target_supervision_einzel} color="bg-violet-500" unit=" Std." />
+                  <ProgressBar label="Supervision Gruppe" value={Math.round(data.total_supervision_gruppe_hours * 10) / 10} max={data.target_supervision_gruppe} color="bg-purple-500" unit=" Std." />
+                </div>
+                <div className="opacity-50 rounded-xl p-3 space-y-2.5 border border-slate-200">
+                  <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Gesamtausbildung</div>
+                  {data.self_experience_enabled && (
+                    <ProgressBar label="Selbsterfahrung" value={data.self_experience_hours} max={data.target_self_experience} color="bg-emerald-500" unit=" Std." />
+                  )}
+                  <ProgressBar label="Theorie" value={data.theorie_hours} max={data.target_theorie} color="bg-teal-500" unit=" Std." />
+                  <ProgressBar label="PT1" value={data.pt1_hours} max={data.target_pt1} color="bg-orange-500" unit=" Std." />
+                  <ProgressBar label="PT2" value={data.pt2_hours} max={data.target_pt2} color="bg-red-500" unit=" Std." />
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Manual hours quick-entry (Gesamtausbildung only) */}
+      {view === 'gesamt' && (
+        <div className="card p-4">
+          <h2 className="text-base font-semibold text-slate-900 mb-3 flex items-center gap-2">
+            <Save size={16} className="text-emerald-500" />
+            Stunden eintragen
+          </h2>
+          <div className="grid grid-cols-2 gap-3">
+            {data.self_experience_enabled && (
+              <div>
+                <label className="label text-xs">Selbsterfahrung (Std.)</label>
+                <input
+                  type="number"
+                  className="input"
+                  step="0.5"
+                  min="0"
+                  value={manualHours.self}
+                  onChange={(e) => setManualHours((h) => ({ ...h, self: e.target.value }))}
+                />
+              </div>
+            )}
+            <div>
+              <label className="label text-xs">Theorie (Std.)</label>
+              <input
+                type="number"
+                className="input"
+                step="0.5"
+                min="0"
+                value={manualHours.theorie}
+                onChange={(e) => setManualHours((h) => ({ ...h, theorie: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="label text-xs">PT1 (Std.)</label>
+              <input
+                type="number"
+                className="input"
+                step="0.5"
+                min="0"
+                value={manualHours.pt1}
+                onChange={(e) => setManualHours((h) => ({ ...h, pt1: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="label text-xs">PT2 (Std.)</label>
+              <input
+                type="number"
+                className="input"
+                step="0.5"
+                min="0"
+                value={manualHours.pt2}
+                onChange={(e) => setManualHours((h) => ({ ...h, pt2: e.target.value }))}
+              />
+            </div>
+          </div>
+          <button
+            onClick={saveManualHours}
+            disabled={savingHours}
+            className="btn-primary w-full justify-center mt-3"
+          >
+            {savingHours ? '...' : 'Speichern'}
+          </button>
+        </div>
+      )}
 
       {/* Prognosis + Financial */}
       <div className="grid md:grid-cols-2 gap-4">

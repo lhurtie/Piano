@@ -20,6 +20,7 @@ def patient_to_out(patient, db: Session) -> schemas.PatientOut:
         created_at=patient.created_at,
         antrag_gesendet_datum=patient.antrag_gesendet_datum,
         antrag_genehmigt_datum=patient.antrag_genehmigt_datum,
+        phase_override=patient.phase_override,
         session_count=session_count,
     )
 

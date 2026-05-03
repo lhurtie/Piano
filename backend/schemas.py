@@ -52,12 +52,14 @@ class PatientUpdate(BaseModel):
     status: Optional[PatientStatus] = None
     antrag_gesendet_datum: Optional[date] = None
     antrag_genehmigt_datum: Optional[date] = None
+    phase_override: Optional[str] = None
 
 
 class PatientOut(PatientBase):
     id: int
     created_at: datetime
     session_count: int = 0
+    phase_override: Optional[str] = None
 
     model_config = {"from_attributes": True}
 

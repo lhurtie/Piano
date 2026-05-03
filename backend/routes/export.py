@@ -540,3 +540,40 @@ def export_patient_csv(
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.get("/sessions/csv")
+def export_sessions_csv(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["id", "patient_chiffre", "datum", "typ", "phase", "sitzungsnummer", "dauer_minuten", "honorar", "notizen"])
+    from models import Session as SessionModel
+    sessions = db.query(SessionModel).order_by(SessionModel.date.asc()).all()
+    for s in sessions:
+        patient = db.query(Patient).filter(Patient.id == s.patient_id).first()
+        patient_sessions = db.query(SessionModel).filter(
+            SessionModel.patient_id == s.patient_id
+        ).order_by(SessionModel.date.asc()).all()
+        sn = next((i + 1 for i, ps in enumerate(patient_sessions) if ps.id == s.id), 0)
+        phase = crud.get_phase_for_session_number(sn)
+        writer.writerow([
+            s.id,
+            patient.chiffre if patient else "",
+            format_date(s.date),
+            getattr(s, "session_type", ""),
+            phase,
+            sn,
+            s.duration_minutes or "",
+            f"{s.revenue_amount:.2f}",
+            s.notes or "",
+        ])
+    buf.seek(0)
+    filename = f"piano_sitzungen_{date.today().strftime('%Y-%m-%d')}.csv"
+    return StreamingResponse(
+        iter([buf.getvalue().encode("utf-8-sig")]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
