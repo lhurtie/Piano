@@ -68,7 +68,8 @@ class SessionBase(BaseModel):
     date: date
     duration_minutes: Optional[int] = None
     notes: Optional[str] = None
-    revenue_amount: float = 90.0
+    revenue_amount: float = 45.80
+    session_type: str = "Einzelsitzung"
 
 
 class SessionCreate(SessionBase):
@@ -80,6 +81,7 @@ class SessionUpdate(BaseModel):
     duration_minutes: Optional[int] = None
     notes: Optional[str] = None
     revenue_amount: Optional[float] = None
+    session_type: Optional[str] = None
 
 
 class SessionOut(SessionBase):
@@ -134,13 +136,21 @@ class SettingOut(BaseModel):
 
 class SettingsUpdate(BaseModel):
     target_therapy_sessions: Optional[str] = None
-    target_supervision: Optional[str] = None
+    target_supervision_einzel: Optional[str] = None
+    target_supervision_gruppe: Optional[str] = None
     target_self_experience: Optional[str] = None
+    target_theorie: Optional[str] = None
+    target_pt1: Optional[str] = None
+    target_pt2: Optional[str] = None
     default_cost_einzel: Optional[str] = None
     default_cost_gruppe: Optional[str] = None
-    default_session_revenue: Optional[str] = None
+    default_revenue_probatorik: Optional[str] = None
+    default_revenue_einzel: Optional[str] = None
     self_experience_enabled: Optional[str] = None
     self_experience_hours: Optional[str] = None
+    theorie_hours: Optional[str] = None
+    pt1_hours: Optional[str] = None
+    pt2_hours: Optional[str] = None
 
 
 # --- Auth ---
@@ -180,13 +190,27 @@ class DashboardData(BaseModel):
     total_sessions: int
     active_patients: int
     completed_patients: int
-    total_supervision_count: int
+    # Supervision breakdown
+    total_supervision_einzel: int
+    total_supervision_gruppe: int
     total_supervision_minutes: int
+    # Manual hours
     self_experience_hours: float
+    theorie_hours: float
+    pt1_hours: float
+    pt2_hours: float
     self_experience_enabled: bool
+    # Targets
     target_therapy_sessions: int
-    target_supervision: int
+    target_supervision_einzel: int
+    target_supervision_gruppe: int
     target_self_experience: int
+    target_theorie: int
+    target_pt1: int
+    target_pt2: int
+    # Progress
+    ambulanz_progress: float
+    gesamt_progress: float
     prognosis: PrognosisData
     financial: FinancialSnapshot
 

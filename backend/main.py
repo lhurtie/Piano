@@ -24,6 +24,15 @@ os.makedirs("/backups", exist_ok=True)
 # Create tables
 Base.metadata.create_all(bind=engine)
 
+# Migrate: add session_type column if missing (SQLite doesn't support ALTER TABLE via SQLAlchemy auto)
+from sqlalchemy import text
+with engine.connect() as conn:
+    try:
+        conn.execute(text("ALTER TABLE sessions ADD COLUMN session_type TEXT NOT NULL DEFAULT 'Einzelsitzung'"))
+        conn.commit()
+    except Exception:
+        pass  # Column already exists
+
 # Seed default settings
 with SessionLocal() as db:
     crud.seed_settings(db)

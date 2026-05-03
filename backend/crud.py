@@ -8,14 +8,22 @@ import schemas
 
 
 DEFAULT_SETTINGS = {
-    "target_therapy_sessions": "100",
-    "target_supervision": "50",
-    "target_self_experience": "100",
-    "default_cost_einzel": "90",
-    "default_cost_gruppe": "40",
-    "default_session_revenue": "90",
+    "target_therapy_sessions": "600",
+    "target_supervision_einzel": "50",
+    "target_supervision_gruppe": "100",
+    "target_self_experience": "120",
+    "target_theorie": "600",
+    "target_pt1": "1200",
+    "target_pt2": "600",
+    "default_cost_einzel": "110",
+    "default_cost_gruppe": "0",
+    "default_revenue_probatorik": "33.57",
+    "default_revenue_einzel": "45.80",
     "self_experience_enabled": "true",
     "self_experience_hours": "0",
+    "theorie_hours": "0",
+    "pt1_hours": "0",
+    "pt2_hours": "0",
     "app_password": "",
 }
 
@@ -119,6 +127,7 @@ def enrich_session(session: SessionModel, db: Session) -> schemas.SessionOut:
         duration_minutes=session.duration_minutes,
         notes=session.notes,
         revenue_amount=session.revenue_amount,
+        session_type=session.session_type,
         patient_chiffre=patient.chiffre if patient else None,
         phase=phase,
         session_number=session_number,
@@ -285,11 +294,18 @@ def delete_supervision(db: Session, supervision_id: int) -> bool:
 def get_dashboard_data(db: Session) -> schemas.DashboardData:
     settings = get_all_settings(db)
 
-    target_sessions = int(settings.get("target_therapy_sessions") or "100")
-    target_supervision = int(settings.get("target_supervision") or "50")
-    target_self_exp = int(settings.get("target_self_experience") or "100")
+    target_sessions = int(settings.get("target_therapy_sessions") or "600")
+    target_sup_einzel = int(settings.get("target_supervision_einzel") or "50")
+    target_sup_gruppe = int(settings.get("target_supervision_gruppe") or "100")
+    target_self_exp = int(settings.get("target_self_experience") or "120")
+    target_theorie = int(settings.get("target_theorie") or "600")
+    target_pt1 = int(settings.get("target_pt1") or "1200")
+    target_pt2 = int(settings.get("target_pt2") or "600")
     self_exp_enabled = (settings.get("self_experience_enabled") or "true").lower() == "true"
     self_exp_hours = float(settings.get("self_experience_hours") or "0")
+    theorie_hours = float(settings.get("theorie_hours") or "0")
+    pt1_hours = float(settings.get("pt1_hours") or "0")
+    pt2_hours = float(settings.get("pt2_hours") or "0")
 
     all_sessions = db.query(SessionModel).all()
     total_sessions = len(all_sessions)
@@ -301,18 +317,15 @@ def get_dashboard_data(db: Session) -> schemas.DashboardData:
         Patient.status == PatientStatus.ABGESCHLOSSEN
     ).count()
 
+    from models import SupervisionType as SVType
     all_supervisions = db.query(Supervision).all()
-    total_supervision_count = len(all_supervisions)
+    total_supervision_einzel = sum(1 for s in all_supervisions if s.type == SVType.EINZEL)
+    total_supervision_gruppe = sum(1 for s in all_supervisions if s.type == SVType.GRUPPE)
     total_supervision_minutes = sum(s.duration_minutes for s in all_supervisions)
 
-    # Prognosis: avg sessions per month over last 3 months (active patients only)
-    active_patient_ids = [
-        p.id for p in db.query(Patient).filter(Patient.status != PatientStatus.ABGESCHLOSSEN).all()
-    ]
-
+    # Prognosis: avg sessions per month over last 3 months
+    # Only count sessions from patients who were NOT abgeschlossen in that month
     today = date.today()
-    three_months_ago = date(today.year, today.month, 1)
-    # Go back 3 months
     month = today.month - 3
     year = today.year
     if month <= 0:
@@ -320,12 +333,19 @@ def get_dashboard_data(db: Session) -> schemas.DashboardData:
         year -= 1
     three_months_ago = date(year, month, 1)
 
+    # Build set of (patient_id, year, month) where patient was abgeschlossen
+    # We approximate: if patient is currently abgeschlossen, check sessions in last 3 months
+    # More accurately: count sessions for patients who are active (not abgeschlossen)
+    # as per the spec: patients NOT abgeschlossen in that month
+    active_patient_ids = [
+        p.id for p in db.query(Patient).filter(Patient.status != PatientStatus.ABGESCHLOSSEN).all()
+    ]
+
     recent_sessions = db.query(SessionModel).filter(
         SessionModel.patient_id.in_(active_patient_ids),
         SessionModel.date >= three_months_ago,
     ).all() if active_patient_ids else []
 
-    # Count months in range
     months_in_range = 3
     avg_per_month = len(recent_sessions) / months_in_range if months_in_range > 0 else 0
 
@@ -358,17 +378,50 @@ def get_dashboard_data(db: Session) -> schemas.DashboardData:
         month_net=month_income - month_costs,
     )
 
+    # Progress calculations
+    def pct(value: float, target: int) -> float:
+        if target <= 0:
+            return 0.0
+        return min(100.0, (value / target) * 100.0)
+
+    therapy_pct = pct(total_sessions, target_sessions)
+    sup_einzel_pct = pct(total_supervision_einzel, target_sup_einzel)
+    sup_gruppe_pct = pct(total_supervision_gruppe, target_sup_gruppe)
+    self_exp_pct = pct(self_exp_hours, target_self_exp) if self_exp_enabled else 0.0
+    theorie_pct = pct(theorie_hours, target_theorie)
+    pt1_pct = pct(pt1_hours, target_pt1)
+    pt2_pct = pct(pt2_hours, target_pt2)
+
+    # ambulanz_progress: average of therapy + sup_einzel + sup_gruppe
+    ambulanz_progress = (therapy_pct + sup_einzel_pct + sup_gruppe_pct) / 3.0
+
+    # gesamt_progress: average of all 6 areas (self experience counts only if enabled)
+    if self_exp_enabled:
+        gesamt_progress = (therapy_pct + sup_einzel_pct + sup_gruppe_pct + self_exp_pct + theorie_pct + (pt1_pct + pt2_pct) / 2.0) / 5.0
+    else:
+        gesamt_progress = (therapy_pct + sup_einzel_pct + sup_gruppe_pct + theorie_pct + (pt1_pct + pt2_pct) / 2.0) / 4.0
+
     return schemas.DashboardData(
         total_sessions=total_sessions,
         active_patients=active_patients,
         completed_patients=completed_patients,
-        total_supervision_count=total_supervision_count,
+        total_supervision_einzel=total_supervision_einzel,
+        total_supervision_gruppe=total_supervision_gruppe,
         total_supervision_minutes=total_supervision_minutes,
         self_experience_hours=self_exp_hours,
+        theorie_hours=theorie_hours,
+        pt1_hours=pt1_hours,
+        pt2_hours=pt2_hours,
         self_experience_enabled=self_exp_enabled,
         target_therapy_sessions=target_sessions,
-        target_supervision=target_supervision,
+        target_supervision_einzel=target_sup_einzel,
+        target_supervision_gruppe=target_sup_gruppe,
         target_self_experience=target_self_exp,
+        target_theorie=target_theorie,
+        target_pt1=target_pt1,
+        target_pt2=target_pt2,
+        ambulanz_progress=round(ambulanz_progress, 1),
+        gesamt_progress=round(gesamt_progress, 1),
         prognosis=prognosis,
         financial=financial,
     )

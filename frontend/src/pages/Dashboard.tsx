@@ -1,25 +1,85 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import {
-  TrendingUp, Users, BookOpen, Euro, Calendar, Plus, ArrowRight, Clock
-} from 'lucide-react'
+import { TrendingUp, Users, BookOpen, Euro, Calendar, Plus, ArrowRight, Clock } from 'lucide-react'
 import { dashboardApi } from '../api'
 import type { DashboardData } from '../types'
+import { triggerCelebration, triggerMilestone } from '../utils/celebration'
 
-function ProgressBar({ value, max, color = 'bg-blue-500' }: { value: number; max: number; color?: string }) {
-  const pct = Math.min(100, Math.round((value / max) * 100))
+const MILESTONE_STORAGE_KEY = 'piano_reached_milestones'
+const PREV_SESSIONS_KEY = 'piano_prev_session_count'
+
+function getReachedMilestones(): Set<string> {
+  try {
+    const raw = localStorage.getItem(MILESTONE_STORAGE_KEY)
+    return raw ? new Set(JSON.parse(raw)) : new Set()
+  } catch {
+    return new Set()
+  }
+}
+
+function saveReachedMilestones(set: Set<string>) {
+  localStorage.setItem(MILESTONE_STORAGE_KEY, JSON.stringify([...set]))
+}
+
+function ProgressBar({
+  value,
+  max,
+  color = 'bg-blue-500',
+  label,
+  unit = '',
+}: {
+  value: number
+  max: number
+  color?: string
+  label: string
+  unit?: string
+}) {
+  const pct = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0
   return (
     <div className="space-y-1">
-      <div className="progress-bar">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium text-slate-700">{label}</span>
+        <span className="text-xs text-slate-500">
+          {value}{unit} / {max}{unit} · {pct}%
+        </span>
+      </div>
+      <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
         <div
-          className={`progress-fill ${color}`}
-          style={{ width: `${pct}%` }}
+          className={`h-2 rounded-full ${color}`}
+          style={{ width: `${pct}%`, transition: 'width 0.8s ease' }}
         />
       </div>
-      <div className="flex justify-between text-xs text-slate-500">
-        <span>{value} von {max}</span>
-        <span>{pct}%</span>
-      </div>
+    </div>
+  )
+}
+
+function RingProgress({ value, label }: { value: number; label: string }) {
+  const radius = 54
+  const circumference = 2 * Math.PI * radius
+  const offset = circumference - (value / 100) * circumference
+
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <svg width="128" height="128" viewBox="0 0 128 128">
+        <circle cx="64" cy="64" r={radius} fill="none" stroke="#e2e8f0" strokeWidth="12" />
+        <circle
+          cx="64"
+          cy="64"
+          r={radius}
+          fill="none"
+          stroke="#3b82f6"
+          strokeWidth="12"
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+          transform="rotate(-90 64 64)"
+          style={{ transition: 'stroke-dashoffset 0.8s ease' }}
+        />
+        <text x="64" y="64" textAnchor="middle" dominantBaseline="middle" className="text-2xl font-bold" style={{ fontSize: '22px', fontWeight: 700, fill: '#1e293b' }}>
+          {Math.round(value)}%
+        </text>
+      </svg>
+      <span className="text-sm font-medium text-slate-600">{label}</span>
     </div>
   )
 }
@@ -32,12 +92,12 @@ function StatCard({ label, value, sub, icon: Icon, color }: {
   color: string
 }) {
   return (
-    <div className="card flex items-start gap-4">
-      <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${color}`}>
-        <Icon size={20} className="text-white" />
+    <div className="card flex items-start gap-3 p-4">
+      <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${color}`}>
+        <Icon size={18} className="text-white" />
       </div>
-      <div className="min-w-0">
-        <div className="text-2xl font-bold text-slate-900 leading-tight">{value}</div>
+      <div className="min-w-0 flex-1">
+        <div className="text-xl font-bold text-slate-900 leading-tight">{value}</div>
         <div className="text-sm font-medium text-slate-700 mt-0.5">{label}</div>
         {sub && <div className="text-xs text-slate-500 mt-0.5">{sub}</div>}
       </div>
@@ -50,10 +110,55 @@ export default function Dashboard() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [view, setView] = useState<'ambulanz' | 'gesamt'>('ambulanz')
+  const checkedMilestones = useRef(false)
 
   useEffect(() => {
     dashboardApi.get()
-      .then(setData)
+      .then((d) => {
+        setData(d)
+
+        if (!checkedMilestones.current) {
+          checkedMilestones.current = true
+
+          // Check if sessions just increased
+          const prev = parseInt(localStorage.getItem(PREV_SESSIONS_KEY) || '0', 10)
+          if (d.total_sessions > prev && prev > 0) {
+            triggerCelebration(`Neue Sitzung eingetragen! Gesamt: ${d.total_sessions}`)
+          }
+          localStorage.setItem(PREV_SESSIONS_KEY, String(d.total_sessions))
+
+          // Check milestones
+          const reached = getReachedMilestones()
+          const MILESTONES = [25, 50, 75, 100]
+
+          const areas: Array<{ key: string; label: string; value: number; target: number }> = [
+            { key: 'therapy', label: 'Therapiesitzungen', value: d.total_sessions, target: d.target_therapy_sessions },
+            { key: 'sup_einzel', label: 'Supervision Einzel', value: d.total_supervision_einzel, target: d.target_supervision_einzel },
+            { key: 'sup_gruppe', label: 'Supervision Gruppe', value: d.total_supervision_gruppe, target: d.target_supervision_gruppe },
+            { key: 'self_exp', label: 'Selbsterfahrung', value: d.self_experience_hours, target: d.target_self_experience },
+            { key: 'theorie', label: 'Theorie', value: d.theorie_hours, target: d.target_theorie },
+            { key: 'pt1', label: 'PT1', value: d.pt1_hours, target: d.target_pt1 },
+            { key: 'pt2', label: 'PT2', value: d.pt2_hours, target: d.target_pt2 },
+          ]
+
+          let needsSave = false
+          for (const area of areas) {
+            if (area.target <= 0) continue
+            const pct = (area.value / area.target) * 100
+            for (const ms of MILESTONES) {
+              const key = `${area.key}_${ms}`
+              if (pct >= ms && !reached.has(key)) {
+                reached.add(key)
+                needsSave = true
+                setTimeout(() => triggerMilestone(area.label, ms), 500)
+                break // only one milestone at a time
+              }
+            }
+          }
+          if (needsSave) saveReachedMilestones(reached)
+        }
+      })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
   }, [])
@@ -61,7 +166,7 @@ export default function Dashboard() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
       </div>
     )
   }
@@ -74,17 +179,20 @@ export default function Dashboard() {
     )
   }
 
-  const supHours = Math.round(data.total_supervision_minutes / 60 * 10) / 10
+  const totalSupervisions = data.total_supervision_einzel + data.total_supervision_gruppe
+  const supHours = Math.round((data.total_supervision_minutes / 60) * 10) / 10
+  const progressValue = view === 'ambulanz' ? data.ambulanz_progress : data.gesamt_progress
+  const progressLabel = view === 'ambulanz' ? 'Ambulanz-Fortschritt' : 'Gesamtausbildung'
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 pb-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1>Dashboard</h1>
-          <p className="text-sm text-slate-500 mt-1">Ihr Ausbildungsfortschritt im Überblick</p>
+          <h1 className="text-xl font-bold text-slate-900">Dashboard</h1>
+          <p className="text-sm text-slate-500 mt-0.5">Dein Ausbildungsfortschritt im Überblick</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button onClick={() => navigate('/sessions')} className="btn-primary">
             <Plus size={16} />
             Sitzung
@@ -97,7 +205,7 @@ export default function Dashboard() {
       </div>
 
       {/* Quick stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard
           label="Sitzungen gesamt"
           value={data.total_sessions}
@@ -114,7 +222,7 @@ export default function Dashboard() {
         />
         <StatCard
           label="Supervisionen"
-          value={data.total_supervision_count}
+          value={totalSupervisions}
           sub={`${supHours} Std. gesamt`}
           icon={BookOpen}
           color="bg-violet-500"
@@ -128,93 +236,125 @@ export default function Dashboard() {
         />
       </div>
 
-      {/* Progress section */}
-      <div className="card">
-        <h2 className="mb-5 flex items-center gap-2">
-          <TrendingUp size={20} className="text-blue-500" />
-          Ausbildungsfortschritt
-        </h2>
-        <div className="space-y-5">
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-slate-700">Therapiesitzungen</span>
-              <span className="text-sm text-slate-500">
-                {data.total_sessions} / {data.target_therapy_sessions}
-              </span>
-            </div>
+      {/* Progress toggle + ring */}
+      <div className="card p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900">
+            <TrendingUp size={18} className="text-blue-500" />
+            Deine Fortschritte
+          </h2>
+          <div className="flex rounded-lg border border-slate-200 overflow-hidden">
+            <button
+              onClick={() => setView('ambulanz')}
+              className={`px-3 py-1.5 text-sm font-medium transition-colors ${view === 'ambulanz' ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+            >
+              Ambulanz
+            </button>
+            <button
+              onClick={() => setView('gesamt')}
+              className={`px-3 py-1.5 text-sm font-medium transition-colors ${view === 'gesamt' ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+            >
+              Gesamtausbildung
+            </button>
+          </div>
+        </div>
+
+        <div className="flex flex-col md:flex-row gap-6 items-start">
+          {/* Ring */}
+          <div className="flex-shrink-0 self-center">
+            <RingProgress value={progressValue} label={progressLabel} />
+          </div>
+
+          {/* Individual bars */}
+          <div className="flex-1 space-y-3 w-full">
             <ProgressBar
+              label="Therapiesitzungen"
               value={data.total_sessions}
               max={data.target_therapy_sessions}
               color="bg-blue-500"
             />
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-slate-700">Supervisionen</span>
-              <span className="text-sm text-slate-500">
-                {data.total_supervision_count} / {data.target_supervision}
-              </span>
-            </div>
             <ProgressBar
-              value={data.total_supervision_count}
-              max={data.target_supervision}
+              label="Supervision Einzel"
+              value={data.total_supervision_einzel}
+              max={data.target_supervision_einzel}
               color="bg-violet-500"
             />
-          </div>
-
-          {data.self_experience_enabled && (
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-slate-700">Selbsterfahrung (Std.)</span>
-                <span className="text-sm text-slate-500">
-                  {data.self_experience_hours} / {data.target_self_experience}
-                </span>
-              </div>
+            <ProgressBar
+              label="Supervision Gruppe"
+              value={data.total_supervision_gruppe}
+              max={data.target_supervision_gruppe}
+              color="bg-purple-500"
+            />
+            {data.self_experience_enabled && (
               <ProgressBar
+                label="Selbsterfahrung"
                 value={data.self_experience_hours}
                 max={data.target_self_experience}
                 color="bg-emerald-500"
+                unit=" Std."
               />
-            </div>
-          )}
+            )}
+            <ProgressBar
+              label="Theorie"
+              value={data.theorie_hours}
+              max={data.target_theorie}
+              color="bg-teal-500"
+              unit=" Std."
+            />
+            <ProgressBar
+              label="PT1"
+              value={data.pt1_hours}
+              max={data.target_pt1}
+              color="bg-orange-500"
+              unit=" Std."
+            />
+            <ProgressBar
+              label="PT2"
+              value={data.pt2_hours}
+              max={data.target_pt2}
+              color="bg-red-500"
+              unit=" Std."
+            />
+          </div>
         </div>
       </div>
 
       {/* Prognosis + Financial */}
       <div className="grid md:grid-cols-2 gap-4">
         {/* Prognosis */}
-        <div className="card">
-          <h2 className="mb-4 flex items-center gap-2">
-            <Clock size={20} className="text-amber-500" />
+        <div className="card p-4">
+          <h2 className="mb-3 flex items-center gap-2 text-base font-semibold text-slate-900">
+            <Clock size={18} className="text-amber-500" />
             Prognose
           </h2>
           <div className="space-y-3">
-            <div className="p-4 bg-blue-50 rounded-xl">
-              <div className="text-sm text-blue-700 font-medium">Ø Sitzungen/Monat (letzte 3 Monate)</div>
-              <div className="text-2xl font-bold text-blue-900 mt-1">
+            <div className="p-3 bg-blue-50 rounded-xl">
+              <div className="text-xs text-blue-700 font-medium">Ø Sitzungen/Monat (letzte 3 Monate)</div>
+              <div className="text-xl font-bold text-blue-900 mt-0.5">
                 {data.prognosis.avg_sessions_per_month}
               </div>
               <div className="text-xs text-blue-600 mt-0.5">nur aktive Patienten</div>
             </div>
 
             {data.prognosis.months_to_target !== null ? (
-              <div className="p-4 bg-emerald-50 rounded-xl">
-                <div className="text-sm text-emerald-700 font-medium">Voraussichtlich fertig in</div>
-                <div className="text-2xl font-bold text-emerald-900 mt-1">
+              <div className="p-3 bg-emerald-50 rounded-xl">
+                <div className="text-xs text-emerald-700 font-medium">
+                  Bei aktuellem Tempo: noch ca.
+                </div>
+                <div className="text-xl font-bold text-emerald-900 mt-0.5">
                   {data.prognosis.months_to_target} Monate
                 </div>
                 <div className="text-xs text-emerald-600 mt-0.5">
-                  bei aktuellem Tempo ({data.prognosis.current} von {data.prognosis.target} Sitzungen)
+                  bis zum Ziel ({data.prognosis.current} von {data.prognosis.target} Sitzungen)
                 </div>
               </div>
             ) : data.total_sessions >= data.target_therapy_sessions ? (
-              <div className="p-4 bg-emerald-50 rounded-xl">
-                <div className="text-sm text-emerald-700 font-medium">Ziel erreicht!</div>
-                <div className="text-2xl font-bold text-emerald-900 mt-1">✓</div>
+              <div className="p-3 bg-emerald-50 rounded-xl">
+                <div className="text-xs text-emerald-700 font-medium">Ziel erreicht!</div>
+                <div className="text-xl font-bold text-emerald-900 mt-0.5">✓</div>
               </div>
             ) : (
-              <div className="p-4 bg-slate-50 rounded-xl">
+              <div className="p-3 bg-slate-50 rounded-xl">
                 <div className="text-sm text-slate-500">Noch keine Sitzungen aufgezeichnet</div>
               </div>
             )}
@@ -222,10 +362,10 @@ export default function Dashboard() {
         </div>
 
         {/* Financial snapshot */}
-        <div className="card">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="flex items-center gap-2">
-              <Euro size={20} className="text-amber-500" />
+        <div className="card p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900">
+              <Euro size={18} className="text-amber-500" />
               Aktueller Monat
             </h2>
             <button
@@ -235,7 +375,7 @@ export default function Dashboard() {
               Details <ArrowRight size={14} />
             </button>
           </div>
-          <div className="space-y-3">
+          <div className="space-y-2">
             <div className="flex justify-between items-center py-2 border-b border-slate-100">
               <span className="text-sm text-slate-600">Einnahmen</span>
               <span className="font-semibold text-emerald-700">

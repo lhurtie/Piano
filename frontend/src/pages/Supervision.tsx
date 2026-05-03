@@ -3,31 +3,36 @@ import { Plus, Trash2, Edit2, Check, X, UserPlus } from 'lucide-react'
 import { supervisionsApi, supervisorsApi, patientsApi, settingsApi } from '../api'
 import type { Supervision, Supervisor, Patient, SupervisionType } from '../types'
 
-interface AddSupervisionModalProps {
+interface SupervisionFormProps {
   supervisors: Supervisor[]
   patients: Patient[]
   defaultCostEinzel: number
   defaultCostGruppe: number
+  initial?: Supervision
   onClose: () => void
-  onAdded: (sup: Supervision) => void
+  onSaved: (sup: Supervision) => void
 }
 
-function AddSupervisionModal({
+function SupervisionFormModal({
   supervisors,
   patients,
   defaultCostEinzel,
   defaultCostGruppe,
+  initial,
   onClose,
-  onAdded,
-}: AddSupervisionModalProps) {
+  onSaved,
+}: SupervisionFormProps) {
+  const isEdit = !!initial
   const today = new Date().toISOString().slice(0, 10)
-  const [supervisorId, setSupervisorId] = useState(supervisors[0]?.id?.toString() || '')
-  const [date, setDate] = useState(today)
-  const [duration, setDuration] = useState('50')
-  const [type, setType] = useState<SupervisionType>('Einzel')
-  const [cost, setCost] = useState(String(defaultCostEinzel))
-  const [notes, setNotes] = useState('')
-  const [selectedPatients, setSelectedPatients] = useState<number[]>([])
+  const [supervisorId, setSupervisorId] = useState(String(initial?.supervisor_id ?? supervisors[0]?.id ?? ''))
+  const [date, setDate] = useState(initial?.date ?? today)
+  const [duration, setDuration] = useState(String(initial?.duration_minutes ?? '50'))
+  const [type, setType] = useState<SupervisionType>(initial?.type ?? 'Einzel')
+  const [cost, setCost] = useState(
+    initial ? String(initial.cost) : String(defaultCostEinzel)
+  )
+  const [notes, setNotes] = useState(initial?.notes ?? '')
+  const [selectedPatients, setSelectedPatients] = useState<number[]>(initial?.patient_ids ?? [])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -48,7 +53,7 @@ function AddSupervisionModal({
     setLoading(true)
     setError('')
     try {
-      const sup = await supervisionsApi.create({
+      const payload = {
         supervisor_id: parseInt(supervisorId),
         date,
         duration_minutes: parseInt(duration),
@@ -56,8 +61,14 @@ function AddSupervisionModal({
         cost: parseFloat(cost),
         notes: notes || undefined,
         patient_ids: selectedPatients,
-      })
-      onAdded(sup)
+      }
+      let sup: Supervision
+      if (isEdit && initial) {
+        sup = await supervisionsApi.update(initial.id, payload)
+      } else {
+        sup = await supervisionsApi.create(payload)
+      }
+      onSaved(sup)
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -68,8 +79,8 @@ function AddSupervisionModal({
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <div className="p-6">
-          <h2 className="mb-6">Neue Supervision</h2>
+        <div className="p-5">
+          <h2 className="mb-5">{isEdit ? 'Supervision bearbeiten' : 'Neue Supervision'}</h2>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="label">Supervisor *</label>
@@ -86,7 +97,7 @@ function AddSupervisionModal({
               </select>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="label">Datum *</label>
                 <input
@@ -110,7 +121,7 @@ function AddSupervisionModal({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="label">Typ</label>
                 <div className="flex rounded-lg border border-slate-300 overflow-hidden">
@@ -145,7 +156,7 @@ function AddSupervisionModal({
 
             <div>
               <label className="label">Patienten (optional)</label>
-              <div className="border border-slate-200 rounded-lg p-3 max-h-40 overflow-y-auto space-y-1">
+              <div className="border border-slate-200 rounded-lg p-3 max-h-36 overflow-y-auto space-y-1">
                 {patients.length === 0 ? (
                   <div className="text-sm text-slate-400">Keine Patienten vorhanden</div>
                 ) : (
@@ -186,10 +197,73 @@ function AddSupervisionModal({
                 Abbrechen
               </button>
               <button type="submit" disabled={loading} className="btn-primary flex-1 justify-center">
-                {loading ? '...' : 'Hinzufügen'}
+                {loading ? '...' : isEdit ? 'Speichern' : 'Hinzufügen'}
               </button>
             </div>
           </form>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+interface DeleteConfirmProps {
+  supervision: Supervision
+  onClose: () => void
+  onDeleted: (id: number) => void
+}
+
+function DeleteConfirmModal({ supervision, onClose, onDeleted }: DeleteConfirmProps) {
+  const [step, setStep] = useState<1 | 2>(1)
+  const [loading, setLoading] = useState(false)
+
+  const handleFinalDelete = async () => {
+    setLoading(true)
+    try {
+      await supervisionsApi.delete(supervision.id)
+      onDeleted(supervision.id)
+    } catch {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content max-w-sm" onClick={(e) => e.stopPropagation()}>
+        <div className="p-6 text-center">
+          {step === 1 ? (
+            <>
+              <div className="text-3xl mb-3">🗑️</div>
+              <h2 className="mb-2 text-lg font-semibold">Supervision wirklich löschen?</h2>
+              <p className="text-sm text-slate-500 mb-5">
+                Supervision vom {new Date(supervision.date).toLocaleDateString('de-DE')} ({supervision.supervisor_name})
+              </p>
+              <div className="flex gap-3">
+                <button onClick={onClose} className="btn-secondary flex-1 justify-center">Abbrechen</button>
+                <button onClick={() => setStep(2)} className="btn-primary flex-1 justify-center bg-red-600 hover:bg-red-700">
+                  Löschen
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="text-3xl mb-3">⚠️</div>
+              <h2 className="mb-2 text-lg font-semibold text-red-700">Nicht rückgängig machbar</h2>
+              <p className="text-sm text-slate-500 mb-5">
+                Die Supervision wird endgültig gelöscht. Bist du sicher?
+              </p>
+              <div className="flex gap-3">
+                <button onClick={onClose} className="btn-secondary flex-1 justify-center">Abbrechen</button>
+                <button
+                  onClick={handleFinalDelete}
+                  disabled={loading}
+                  className="btn-primary flex-1 justify-center bg-red-600 hover:bg-red-700"
+                >
+                  {loading ? '...' : 'Endgültig löschen'}
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -251,7 +325,7 @@ function ManageSupervisorsModal({ supervisors, onClose, onUpdated }: ManageSuper
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="p-6">
-          <h2 className="mb-6">Supervisoren verwalten</h2>
+          <h2 className="mb-5">Supervisoren verwalten</h2>
 
           {error && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600 mb-4">
@@ -306,7 +380,7 @@ function ManageSupervisorsModal({ supervisors, onClose, onUpdated }: ManageSuper
               onChange={(e) => setNewName(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && addSupervisor()}
             />
-            <button onClick={addSupervisor} className="btn-primary">
+            <button onClick={addSupervisor} className="btn-primary whitespace-nowrap">
               <UserPlus size={16} /> Hinzufügen
             </button>
           </div>
@@ -324,14 +398,18 @@ export default function SupervisionPage() {
   const [supervisions, setSupervisions] = useState<Supervision[]>([])
   const [supervisors, setSupervisors] = useState<Supervisor[]>([])
   const [patients, setPatients] = useState<Patient[]>([])
-  const [defaultCostEinzel, setDefaultCostEinzel] = useState(90)
-  const [defaultCostGruppe, setDefaultCostGruppe] = useState(40)
+  const [defaultCostEinzel, setDefaultCostEinzel] = useState(110)
+  const [defaultCostGruppe, setDefaultCostGruppe] = useState(0)
   const [loading, setLoading] = useState(true)
   const [showAddModal, setShowAddModal] = useState(false)
   const [showSupervisorsModal, setShowSupervisorsModal] = useState(false)
+  const [editSupervision, setEditSupervision] = useState<Supervision | null>(null)
+  const [deleteSupervision, setDeleteSupervision] = useState<Supervision | null>(null)
 
   const totalMinutes = supervisions.reduce((sum, s) => sum + s.duration_minutes, 0)
   const totalCost = supervisions.reduce((sum, s) => sum + s.cost, 0)
+  const einzelCount = supervisions.filter((s) => s.type === 'Einzel').length
+  const gruppeCount = supervisions.filter((s) => s.type === 'Gruppe').length
 
   useEffect(() => {
     Promise.all([
@@ -343,31 +421,25 @@ export default function SupervisionPage() {
       setSupervisions(sups)
       setSupervisors(supervisorList)
       setPatients(patientList)
-      setDefaultCostEinzel(parseFloat(settings.default_cost_einzel || '90'))
-      setDefaultCostGruppe(parseFloat(settings.default_cost_gruppe || '40'))
+      setDefaultCostEinzel(parseFloat(settings.default_cost_einzel || '110'))
+      setDefaultCostGruppe(parseFloat(settings.default_cost_gruppe || '0'))
     }).finally(() => setLoading(false))
   }, [])
 
-  const deleteSupervision = async (id: number) => {
-    if (!confirm('Supervision löschen?')) return
-    await supervisionsApi.delete(id)
-    setSupervisions((prev) => prev.filter((s) => s.id !== id))
-  }
-
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-5 pb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1>Supervision</h1>
-          <p className="text-sm text-slate-500 mt-1">
-            {supervisions.length} Supervisionen ·{' '}
-            {Math.round(totalMinutes / 60 * 10) / 10} Std. ·{' '}
+          <h1 className="text-xl font-bold text-slate-900">Supervision</h1>
+          <p className="text-sm text-slate-500 mt-0.5">
+            {supervisions.length} Supervisionen · Einzel: {einzelCount} · Gruppe: {gruppeCount} ·{' '}
+            {Math.round((totalMinutes / 60) * 10) / 10} Std. ·{' '}
             {totalCost.toFixed(2)} € Kosten
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button onClick={() => setShowSupervisorsModal(true)} className="btn-secondary">
-            <UserPlus size={16} /> Supervisoren
+            <UserPlus size={16} /> Supervisoren verwalten
           </button>
           <button onClick={() => setShowAddModal(true)} className="btn-primary">
             <Plus size={16} /> Neue Supervision
@@ -375,17 +447,17 @@ export default function SupervisionPage() {
         </div>
       </div>
 
-      <div className="table-container bg-white">
+      <div className="table-container bg-white overflow-x-auto">
         {loading ? (
           <div className="flex justify-center py-12">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
           </div>
         ) : supervisions.length === 0 ? (
           <div className="text-center py-12 text-slate-500">
-            Noch keine Supervisionen.
+            Noch keine Supervisionen. Füge deine erste Supervision hinzu!
           </div>
         ) : (
-          <table>
+          <table className="min-w-full">
             <thead>
               <tr>
                 <th>Datum</th>
@@ -401,15 +473,15 @@ export default function SupervisionPage() {
             <tbody>
               {supervisions.map((s) => (
                 <tr key={s.id}>
-                  <td className="font-medium">{new Date(s.date).toLocaleDateString('de-DE')}</td>
+                  <td className="font-medium whitespace-nowrap">{new Date(s.date).toLocaleDateString('de-DE')}</td>
                   <td>{s.supervisor_name}</td>
                   <td>
                     <span className={s.type === 'Einzel' ? 'badge-blue' : 'badge-purple'}>
                       {s.type}
                     </span>
                   </td>
-                  <td className="text-slate-600">{s.duration_minutes} Min.</td>
-                  <td className="font-medium">{s.cost.toFixed(2)} €</td>
+                  <td className="text-slate-600 whitespace-nowrap">{s.duration_minutes} Min.</td>
+                  <td className="font-medium whitespace-nowrap">{s.cost.toFixed(2)} €</td>
                   <td className="text-slate-600 text-xs">
                     {s.patient_chiffres.length > 0
                       ? s.patient_chiffres.join(', ')
@@ -419,12 +491,22 @@ export default function SupervisionPage() {
                     {s.notes || '—'}
                   </td>
                   <td>
-                    <button
-                      onClick={() => deleteSupervision(s.id)}
-                      className="p-1 text-slate-400 hover:text-red-600 transition-colors"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setEditSupervision(s)}
+                        className="p-1 text-slate-400 hover:text-blue-600 transition-colors"
+                        title="Bearbeiten"
+                      >
+                        <Edit2 size={14} />
+                      </button>
+                      <button
+                        onClick={() => setDeleteSupervision(s)}
+                        className="p-1 text-slate-400 hover:text-red-600 transition-colors"
+                        title="Löschen"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -434,15 +516,41 @@ export default function SupervisionPage() {
       </div>
 
       {showAddModal && (
-        <AddSupervisionModal
+        <SupervisionFormModal
           supervisors={supervisors}
           patients={patients}
           defaultCostEinzel={defaultCostEinzel}
           defaultCostGruppe={defaultCostGruppe}
           onClose={() => setShowAddModal(false)}
-          onAdded={(s) => {
+          onSaved={(s) => {
             setSupervisions((prev) => [s, ...prev])
             setShowAddModal(false)
+          }}
+        />
+      )}
+
+      {editSupervision && (
+        <SupervisionFormModal
+          supervisors={supervisors}
+          patients={patients}
+          defaultCostEinzel={defaultCostEinzel}
+          defaultCostGruppe={defaultCostGruppe}
+          initial={editSupervision}
+          onClose={() => setEditSupervision(null)}
+          onSaved={(s) => {
+            setSupervisions((prev) => prev.map((x) => (x.id === s.id ? s : x)))
+            setEditSupervision(null)
+          }}
+        />
+      )}
+
+      {deleteSupervision && (
+        <DeleteConfirmModal
+          supervision={deleteSupervision}
+          onClose={() => setDeleteSupervision(null)}
+          onDeleted={(id) => {
+            setSupervisions((prev) => prev.filter((s) => s.id !== id))
+            setDeleteSupervision(null)
           }}
         />
       )}

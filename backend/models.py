@@ -66,6 +66,7 @@ class Session(Base):
     duration_minutes = Column(Integer, nullable=True)
     notes = Column(Text, nullable=True)
     revenue_amount = Column(Float, nullable=False, default=90.0)
+    session_type = Column(String, nullable=False, default="Einzelsitzung")
 
     patient = relationship("Patient", back_populates="sessions")
 

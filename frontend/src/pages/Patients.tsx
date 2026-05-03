@@ -95,6 +95,7 @@ function NewPatientModal({ onClose, onCreated }: NewPatientModalProps) {
 export default function Patients() {
   const navigate = useNavigate()
   const [patients, setPatients] = useState<Patient[]>([])
+  const [allPatients, setAllPatients] = useState<Patient[]>([])
   const [loading, setLoading] = useState(true)
   const [showCompleted, setShowCompleted] = useState(true)
   const [search, setSearch] = useState('')
@@ -108,6 +109,8 @@ export default function Patients() {
   }
 
   useEffect(() => {
+    // Always load all patients for the summary bar
+    patientsApi.list(true).then(setAllPatients)
     load(showCompleted)
   }, [showCompleted])
 
@@ -115,13 +118,35 @@ export default function Patients() {
     p.chiffre.toLowerCase().includes(search.toLowerCase()),
   )
 
+  const activeCount = allPatients.filter((p) => p.status !== 'Therapie abgeschlossen').length
+  const completedCount = allPatients.filter((p) => p.status === 'Therapie abgeschlossen').length
+  const totalSessions = allPatients.reduce((sum, p) => sum + p.session_count, 0)
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 pb-6">
+      {/* Fixed summary bar */}
+      <div className="card p-3 flex flex-wrap gap-4 bg-slate-50 border border-slate-200">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-500 font-medium">Aktive Patienten</span>
+          <span className="text-base font-bold text-emerald-700">{activeCount}</span>
+        </div>
+        <div className="w-px bg-slate-200 hidden sm:block" />
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-500 font-medium">Abgeschlossene</span>
+          <span className="text-base font-bold text-slate-600">{completedCount}</span>
+        </div>
+        <div className="w-px bg-slate-200 hidden sm:block" />
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-500 font-medium">Gesamtsitzungen</span>
+          <span className="text-base font-bold text-blue-700">{totalSessions}</span>
+        </div>
+      </div>
+
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1>Patienten</h1>
-          <p className="text-sm text-slate-500 mt-1">{patients.length} Patienten gesamt</p>
+          <h1 className="text-xl font-bold text-slate-900">Patienten</h1>
+          <p className="text-sm text-slate-500 mt-0.5">{patients.length} Patienten angezeigt</p>
         </div>
         <button onClick={() => setShowModal(true)} className="btn-primary">
           <Plus size={16} />
@@ -130,8 +155,8 @@ export default function Patients() {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-3 items-center">
-        <div className="relative flex-1 max-w-sm">
+      <div className="flex flex-wrap gap-3 items-center">
+        <div className="relative flex-1 min-w-0 max-w-sm">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             className="input pl-9"
@@ -142,7 +167,7 @@ export default function Patients() {
         </div>
         <button
           onClick={() => setShowCompleted(!showCompleted)}
-          className="btn-secondary gap-2"
+          className="btn-secondary gap-2 whitespace-nowrap"
         >
           {showCompleted ? <Eye size={16} /> : <EyeOff size={16} />}
           Abgeschlossene {showCompleted ? 'ausblenden' : 'anzeigen'}

@@ -18,6 +18,7 @@ export interface Session {
   duration_minutes: number | null
   notes: string | null
   revenue_amount: number
+  session_type: string
   patient_chiffre: string | null
   phase: string | null
   session_number: number | null
@@ -46,13 +47,27 @@ export interface DashboardData {
   total_sessions: number
   active_patients: number
   completed_patients: number
-  total_supervision_count: number
+  // Supervision breakdown
+  total_supervision_einzel: number
+  total_supervision_gruppe: number
   total_supervision_minutes: number
+  // Manual hours
   self_experience_hours: number
+  theorie_hours: number
+  pt1_hours: number
+  pt2_hours: number
   self_experience_enabled: boolean
+  // Targets
   target_therapy_sessions: number
-  target_supervision: number
+  target_supervision_einzel: number
+  target_supervision_gruppe: number
   target_self_experience: number
+  target_theorie: number
+  target_pt1: number
+  target_pt2: number
+  // Progress
+  ambulanz_progress: number
+  gesamt_progress: number
   prognosis: {
     avg_sessions_per_month: number
     months_to_target: number | null
@@ -91,11 +106,19 @@ export interface BackupFile {
 
 export interface Settings {
   target_therapy_sessions: string
-  target_supervision: string
+  target_supervision_einzel: string
+  target_supervision_gruppe: string
   target_self_experience: string
+  target_theorie: string
+  target_pt1: string
+  target_pt2: string
   default_cost_einzel: string
   default_cost_gruppe: string
-  default_session_revenue: string
+  default_revenue_probatorik: string
+  default_revenue_einzel: string
   self_experience_enabled: string
   self_experience_hours: string
+  theorie_hours: string
+  pt1_hours: string
+  pt2_hours: string
 }

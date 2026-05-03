@@ -86,19 +86,18 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6 max-w-2xl pb-6">
       <div>
-        <h1>Einstellungen</h1>
-        <p className="text-sm text-slate-500 mt-1">Ziele und Standardwerte konfigurieren</p>
+        <h1 className="text-xl font-bold text-slate-900">Einstellungen</h1>
+        <p className="text-sm text-slate-500 mt-0.5">Deine Ziele und Standardwerte konfigurieren</p>
       </div>
 
-      {/* Settings form */}
       <form onSubmit={handleSave} className="space-y-6">
-        {/* Targets */}
+        {/* Ambulanz-Ziele */}
         <div className="card space-y-4">
-          <h2>Ausbildungsziele</h2>
+          <h2 className="text-base font-semibold text-slate-900">Ambulanz-Ziele</h2>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="label">Therapiesitzungen (Ziel)</label>
               <input
@@ -110,17 +109,65 @@ export default function SettingsPage() {
               />
             </div>
             <div>
-              <label className="label">Supervisionen (Ziel)</label>
+              <label className="label">Supervision Einzel (Ziel)</label>
               <input
                 type="number"
                 className="input"
-                value={settings.target_supervision}
-                onChange={(e) => update('target_supervision', e.target.value)}
+                value={settings.target_supervision_einzel}
+                onChange={(e) => update('target_supervision_einzel', e.target.value)}
                 min={1}
               />
             </div>
             <div>
-              <label className="label">Selbsterfahrung Std. (Ziel)</label>
+              <label className="label">Supervision Gruppe (Ziel)</label>
+              <input
+                type="number"
+                className="input"
+                value={settings.target_supervision_gruppe}
+                onChange={(e) => update('target_supervision_gruppe', e.target.value)}
+                min={1}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Ausbildungsziele gesamt */}
+        <div className="card space-y-4">
+          <h2 className="text-base font-semibold text-slate-900">Gesamtausbildungs-Ziele</h2>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="label">Theorie (Stunden-Ziel)</label>
+              <input
+                type="number"
+                className="input"
+                value={settings.target_theorie}
+                onChange={(e) => update('target_theorie', e.target.value)}
+                min={1}
+              />
+            </div>
+            <div>
+              <label className="label">PT1 (Stunden-Ziel)</label>
+              <input
+                type="number"
+                className="input"
+                value={settings.target_pt1}
+                onChange={(e) => update('target_pt1', e.target.value)}
+                min={1}
+              />
+            </div>
+            <div>
+              <label className="label">PT2 (Stunden-Ziel)</label>
+              <input
+                type="number"
+                className="input"
+                value={settings.target_pt2}
+                onChange={(e) => update('target_pt2', e.target.value)}
+                min={1}
+              />
+            </div>
+            <div>
+              <label className="label">Selbsterfahrung (Stunden-Ziel)</label>
               <input
                 type="number"
                 className="input"
@@ -141,7 +188,7 @@ export default function SettingsPage() {
                   settings.self_experience_enabled === 'true' ? 'false' : 'true',
                 )
               }
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ${
                 settings.self_experience_enabled === 'true' ? 'bg-blue-600' : 'bg-slate-300'
               }`}
             >
@@ -155,42 +202,100 @@ export default function SettingsPage() {
               Selbsterfahrung im Dashboard anzeigen
             </span>
           </div>
-
-          {/* Self experience hours */}
-          <div>
-            <label className="label">Absolvierte Selbsterfahrungsstunden</label>
-            <input
-              type="number"
-              className="input max-w-xs"
-              value={settings.self_experience_hours}
-              onChange={(e) => update('self_experience_hours', e.target.value)}
-              min={0}
-              step="0.5"
-            />
-            <p className="text-xs text-slate-500 mt-1">
-              Tragen Sie hier Ihre bisher absolvierten Selbsterfahrungsstunden ein.
-            </p>
-          </div>
         </div>
 
-        {/* Default values */}
+        {/* Geleistete Stunden */}
         <div className="card space-y-4">
-          <h2>Standardwerte</h2>
+          <h2 className="text-base font-semibold text-slate-900">Deine geleisteten Stunden</h2>
+          <p className="text-xs text-slate-500">
+            Trag hier deine bisher absolvierten Stunden ein. Diese werden im Dashboard als Fortschritt angezeigt.
+          </p>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="label">Sitzungshonorar (€)</label>
+              <label className="label">Geleistete Selbsterfahrungs-Stunden</label>
               <input
                 type="number"
                 className="input"
-                value={settings.default_session_revenue}
-                onChange={(e) => update('default_session_revenue', e.target.value)}
+                value={settings.self_experience_hours}
+                onChange={(e) => update('self_experience_hours', e.target.value)}
+                min={0}
+                step="0.5"
+              />
+            </div>
+            <div>
+              <label className="label">Geleistete Theorie-Stunden</label>
+              <input
+                type="number"
+                className="input"
+                value={settings.theorie_hours}
+                onChange={(e) => update('theorie_hours', e.target.value)}
+                min={0}
+                step="0.5"
+              />
+            </div>
+            <div>
+              <label className="label">Geleistete PT1-Stunden</label>
+              <input
+                type="number"
+                className="input"
+                value={settings.pt1_hours}
+                onChange={(e) => update('pt1_hours', e.target.value)}
+                min={0}
+                step="0.5"
+              />
+            </div>
+            <div>
+              <label className="label">Geleistete PT2-Stunden</label>
+              <input
+                type="number"
+                className="input"
+                value={settings.pt2_hours}
+                onChange={(e) => update('pt2_hours', e.target.value)}
+                min={0}
+                step="0.5"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Standardvergütung */}
+        <div className="card space-y-4">
+          <h2 className="text-base font-semibold text-slate-900">Standardvergütung (€)</h2>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="label">Vergütung Probatorik</label>
+              <input
+                type="number"
+                className="input"
+                value={settings.default_revenue_probatorik}
+                onChange={(e) => update('default_revenue_probatorik', e.target.value)}
                 min={0}
                 step="0.01"
               />
             </div>
             <div>
-              <label className="label">Supervision Einzel (€)</label>
+              <label className="label">Vergütung Einzelsitzung</label>
+              <input
+                type="number"
+                className="input"
+                value={settings.default_revenue_einzel}
+                onChange={(e) => update('default_revenue_einzel', e.target.value)}
+                min={0}
+                step="0.01"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Supervisionskosten */}
+        <div className="card space-y-4">
+          <h2 className="text-base font-semibold text-slate-900">Standard-Supervisionskosten (€)</h2>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="label">Supervision Einzel (Kosten)</label>
               <input
                 type="number"
                 className="input"
@@ -201,7 +306,7 @@ export default function SettingsPage() {
               />
             </div>
             <div>
-              <label className="label">Supervision Gruppe (€)</label>
+              <label className="label">Supervision Gruppe (Kosten)</label>
               <input
                 type="number"
                 className="input"
@@ -239,7 +344,7 @@ export default function SettingsPage() {
 
       {/* Password change */}
       <div className="card space-y-4">
-        <h2 className="flex items-center gap-2">
+        <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900">
           <Lock size={18} className="text-slate-500" />
           Passwort ändern
         </h2>
@@ -265,7 +370,7 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="label">Neues Passwort</label>
               <input

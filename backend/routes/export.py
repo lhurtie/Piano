@@ -72,30 +72,35 @@ def export_pdf(
 
     # Settings / progress
     settings = crud.get_all_settings(db)
-    target_sessions = int(settings.get("target_therapy_sessions") or "100")
-    target_supervision = int(settings.get("target_supervision") or "50")
-    target_self_exp = int(settings.get("target_self_experience") or "100")
+    target_sessions = int(settings.get("target_therapy_sessions") or "600")
+    target_sup_einzel = int(settings.get("target_supervision_einzel") or "50")
+    target_sup_gruppe = int(settings.get("target_supervision_gruppe") or "100")
+    target_self_exp = int(settings.get("target_self_experience") or "120")
     self_exp_enabled = (settings.get("self_experience_enabled") or "true").lower() == "true"
     self_exp_hours = float(settings.get("self_experience_hours") or "0")
 
     all_sessions = db.query(SessionModel).all()
     total_sessions = len(all_sessions)
+    from models import SupervisionType as SVType
     all_supervisions = db.query(Supervision).all()
+    total_supervision_einzel = sum(1 for s in all_supervisions if s.type == SVType.EINZEL)
+    total_supervision_gruppe = sum(1 for s in all_supervisions if s.type == SVType.GRUPPE)
     total_supervision_count = len(all_supervisions)
-    total_supervision_minutes = sum(s.duration_minutes for s in all_supervisions)
 
     elements.append(Paragraph("Ausbildungsfortschritt", heading_style))
     progress_data = [
         ["Bereich", "Aktuell", "Ziel", "Fortschritt"],
         ["Therapiesitzungen", str(total_sessions), str(target_sessions),
-         f"{min(100, round(total_sessions / target_sessions * 100))}%"],
-        ["Supervisionen", str(total_supervision_count), str(target_supervision),
-         f"{min(100, round(total_supervision_count / target_supervision * 100))}%"],
+         f"{min(100, round(total_sessions / target_sessions * 100)) if target_sessions > 0 else 0}%"],
+        ["Supervision Einzel", str(total_supervision_einzel), str(target_sup_einzel),
+         f"{min(100, round(total_supervision_einzel / target_sup_einzel * 100)) if target_sup_einzel > 0 else 0}%"],
+        ["Supervision Gruppe", str(total_supervision_gruppe), str(target_sup_gruppe),
+         f"{min(100, round(total_supervision_gruppe / target_sup_gruppe * 100)) if target_sup_gruppe > 0 else 0}%"],
     ]
     if self_exp_enabled:
         progress_data.append([
             "Selbsterfahrung (Std.)", f"{self_exp_hours:.1f}", str(target_self_exp),
-            f"{min(100, round(self_exp_hours / target_self_exp * 100))}%"
+            f"{min(100, round(self_exp_hours / target_self_exp * 100)) if target_self_exp > 0 else 0}%"
         ])
 
     progress_table = Table(progress_data, colWidths=[6 * cm, 3 * cm, 3 * cm, 3 * cm])
