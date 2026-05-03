@@ -53,9 +53,9 @@ _corrections = {
 }
 with SessionLocal() as db:
     for key, (old_val, new_val) in _corrections.items():
-        s = db.query(Setting).filter(Setting.key == key, Setting.value == old_val).first()
-        if s:
-            s.value = new_val
+        setting_row = db.query(Setting).filter(Setting.key == key, Setting.value == old_val).first()
+        if setting_row:
+            setting_row.value = new_val
     db.commit()
 
 
