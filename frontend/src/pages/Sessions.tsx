@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Trash2, Search, Edit2, FileText, Archive, X } from 'lucide-react'
+import { Plus, Trash2, Search, Edit2, FileText, Archive, X, SlidersHorizontal } from 'lucide-react'
 import { sessionsApi, patientsApi, settingsApi, exportApi } from '../api'
 import type { Session, Patient, Settings } from '../types'
 import { addRipple, delay } from '../utils/juice'
@@ -306,6 +306,7 @@ export default function Sessions() {
   const [search, setSearch] = useState('')
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
+  const [showFilterPanel, setShowFilterPanel] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [editSession, setEditSession] = useState<Session | null>(null)
   const [deleteSession, setDeleteSession] = useState<Session | null>(null)
@@ -383,9 +384,9 @@ export default function Sessions() {
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-3 items-center">
-        <div className="relative flex-1 min-w-[180px] max-w-sm">
+      {/* Search + Filter toggle */}
+      <div className="flex gap-2 items-center">
+        <div className="relative flex-1 max-w-sm">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             className="input input-juice pl-9"
@@ -394,35 +395,48 @@ export default function Sessions() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs text-slate-500 whitespace-nowrap">Von</span>
-          <input
-            type="date"
-            className="input text-sm"
-            style={{ width: 'auto' }}
-            value={fromDate}
-            onChange={(e) => setFromDate(e.target.value)}
-          />
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs text-slate-500 whitespace-nowrap">Bis</span>
-          <input
-            type="date"
-            className="input text-sm"
-            style={{ width: 'auto' }}
-            value={toDate}
-            onChange={(e) => setToDate(e.target.value)}
-          />
-        </div>
-        {hasDateFilter && (
-          <button
-            onClick={() => { setFromDate(''); setToDate('') }}
-            className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-700 transition-colors"
-          >
-            <X size={12} /> Filter löschen
-          </button>
-        )}
+        <button
+          onClick={() => { setShowFilterPanel((v) => !v); if (showFilterPanel) { setFromDate(''); setToDate('') } }}
+          className={`btn-secondary btn-juice ripple-container gap-1.5 whitespace-nowrap ${(showFilterPanel || hasDateFilter) ? 'ring-2 ring-blue-400 text-blue-700' : ''}`}
+        >
+          <SlidersHorizontal size={15} />
+          Zeitraum{hasDateFilter ? ' ✓' : ''}
+        </button>
       </div>
+
+      {/* Date filter panel */}
+      {showFilterPanel && (
+        <div className="flex flex-wrap gap-3 items-center p-3 bg-blue-50 rounded-xl border border-blue-100">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium text-slate-600 whitespace-nowrap">Von</span>
+            <input
+              type="date"
+              className="input text-sm"
+              style={{ width: 'auto', minWidth: 0 }}
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium text-slate-600 whitespace-nowrap">Bis</span>
+            <input
+              type="date"
+              className="input text-sm"
+              style={{ width: 'auto', minWidth: 0 }}
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+            />
+          </div>
+          {hasDateFilter && (
+            <button
+              onClick={() => { setFromDate(''); setToDate('') }}
+              className="flex items-center gap-1 text-xs text-slate-400 hover:text-red-600 transition-colors"
+            >
+              <X size={12} /> Löschen
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="table-container bg-white overflow-x-auto">
         {loading ? (

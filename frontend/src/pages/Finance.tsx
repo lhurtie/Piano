@@ -38,8 +38,8 @@ export default function Finance() {
           { label: 'Netto gesamt', value: `${totalNet.toFixed(2)} €`, color: totalNet >= 0 ? 'text-blue-600' : 'text-red-600' },
         ].map(({ label, value, color }) => (
           <div key={label} className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col items-center justify-center text-center min-h-[80px]">
-            <div className={`text-xl font-bold leading-tight ${color}`}>{value}</div>
-            <div className="text-xs text-slate-500 mt-1">{label}</div>
+            <div className={`text-xl font-bold leading-tight whitespace-nowrap ${color}`}>{value}</div>
+            <div className="text-xs text-slate-500 mt-1 text-center">{label}</div>
           </div>
         ))}
       </div>

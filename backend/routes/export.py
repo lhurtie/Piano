@@ -72,10 +72,10 @@ def export_pdf(
 
     # Settings / progress
     settings = crud.get_all_settings(db)
-    target_sessions = int(settings.get("target_therapy_sessions") or "600")
-    target_sup_einzel = int(settings.get("target_supervision_einzel") or "50")
-    target_sup_gruppe = int(settings.get("target_supervision_gruppe") or "100")
-    target_self_exp = int(settings.get("target_self_experience") or "120")
+    target_sessions = int(float(settings.get("target_therapy_sessions") or "600"))
+    target_sup_einzel = float(settings.get("target_supervision_einzel") or "37.5")
+    target_sup_gruppe = float(settings.get("target_supervision_gruppe") or "75")
+    target_self_exp = float(settings.get("target_self_experience") or "120")
     self_exp_enabled = (settings.get("self_experience_enabled") or "true").lower() == "true"
     self_exp_hours = float(settings.get("self_experience_hours") or "0")
 
@@ -83,19 +83,20 @@ def export_pdf(
     total_sessions = len(all_sessions)
     from models import SupervisionType as SVType
     all_supervisions = db.query(Supervision).all()
-    total_supervision_einzel = sum(1 for s in all_supervisions if s.type == SVType.EINZEL)
-    total_supervision_gruppe = sum(1 for s in all_supervisions if s.type == SVType.GRUPPE)
-    total_supervision_count = len(all_supervisions)
+    einzel_mins = sum(s.duration_minutes for s in all_supervisions if s.type == SVType.EINZEL)
+    gruppe_mins = sum(s.duration_minutes for s in all_supervisions if s.type == SVType.GRUPPE)
+    einzel_hours = round(einzel_mins / 60, 1)
+    gruppe_hours = round(gruppe_mins / 60, 1)
 
     elements.append(Paragraph("Ausbildungsfortschritt", heading_style))
     progress_data = [
         ["Bereich", "Aktuell", "Ziel", "Fortschritt"],
         ["Therapiesitzungen", str(total_sessions), str(target_sessions),
          f"{min(100, round(total_sessions / target_sessions * 100)) if target_sessions > 0 else 0}%"],
-        ["Supervision Einzel", str(total_supervision_einzel), str(target_sup_einzel),
-         f"{min(100, round(total_supervision_einzel / target_sup_einzel * 100)) if target_sup_einzel > 0 else 0}%"],
-        ["Supervision Gruppe", str(total_supervision_gruppe), str(target_sup_gruppe),
-         f"{min(100, round(total_supervision_gruppe / target_sup_gruppe * 100)) if target_sup_gruppe > 0 else 0}%"],
+        ["Supervision Einzel (Std.)", f"{einzel_hours}", f"{target_sup_einzel}",
+         f"{min(100, round(einzel_hours / target_sup_einzel * 100)) if target_sup_einzel > 0 else 0}%"],
+        ["Supervision Gruppe (Std.)", f"{gruppe_hours}", f"{target_sup_gruppe}",
+         f"{min(100, round(gruppe_hours / target_sup_gruppe * 100)) if target_sup_gruppe > 0 else 0}%"],
     ]
     if self_exp_enabled:
         progress_data.append([

@@ -133,6 +133,34 @@ export const settingsApi = {
     request<{ message: string }>('PATCH', '/settings', data),
 }
 
+async function uploadFile<T>(path: string, file: File): Promise<T> {
+  const token = getToken()
+  const form = new FormData()
+  form.append('file', file)
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  })
+  if (res.status === 401) {
+    clearToken()
+    window.location.href = '/login'
+    throw new Error('Unauthorized')
+  }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Unbekannter Fehler' }))
+    throw new Error(err.detail || `HTTP ${res.status}`)
+  }
+  return res.json()
+}
+
+export const importApi = {
+  sessions: (file: File) =>
+    uploadFile<{ imported: number; errors: string[] }>('/import/sessions', file),
+  supervisions: (file: File) =>
+    uploadFile<{ imported: number; errors: string[] }>('/import/supervisions', file),
+}
+
 function downloadBlob(blob: Blob, filename: string) {
   const blobUrl = URL.createObjectURL(blob)
   const a = document.createElement('a')

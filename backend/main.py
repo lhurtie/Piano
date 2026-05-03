@@ -15,6 +15,7 @@ from auth import get_current_user
 import crud
 import schemas as s
 from routes import auth, patients, sessions, supervisors, supervisions, finance, settings, export, backup
+from routes import import_routes
 from routes.backup import do_auto_backup
 
 # Ensure data directory exists
@@ -58,6 +59,24 @@ with SessionLocal() as db:
             setting_row.value = new_val
     db.commit()
 
+# Password reset via file: place /app/data/RESET_PASSWORD with new password, restart container
+_reset_file = Path("/app/data/RESET_PASSWORD")
+if _reset_file.exists():
+    try:
+        import bcrypt as _bcrypt
+        new_pw = _reset_file.read_text().strip()
+        if new_pw:
+            hashed = _bcrypt.hashpw(new_pw.encode(), _bcrypt.gensalt()).decode()
+            with SessionLocal() as db:
+                _pw_row = db.query(Setting).filter(Setting.key == "app_password").first()
+                if _pw_row:
+                    _pw_row.value = hashed
+                    db.commit()
+            print("[Piano] Passwort wurde erfolgreich zurückgesetzt.")
+        _reset_file.unlink()
+    except Exception as _reset_err:
+        print(f"[Piano] Fehler beim Passwort-Reset: {_reset_err}")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -90,6 +109,7 @@ app.include_router(finance.router, prefix="/api")
 app.include_router(settings.router, prefix="/api")
 app.include_router(export.router, prefix="/api")
 app.include_router(backup.router, prefix="/api")
+app.include_router(import_routes.router, prefix="/api")
 
 
 @app.get("/api/dashboard", response_model=s.DashboardData)

@@ -1,7 +1,30 @@
-import { useState, useEffect } from 'react'
-import { Save, Eye, EyeOff, Lock, CheckCircle } from 'lucide-react'
-import { settingsApi, authApi } from '../api'
+import { useState, useEffect, useRef } from 'react'
+import { Save, Eye, EyeOff, Lock, CheckCircle, Upload, Download, AlertTriangle } from 'lucide-react'
+import { settingsApi, authApi, importApi } from '../api'
 import type { Settings } from '../types'
+
+type ImportType = 'sessions' | 'supervisions'
+
+const SESSION_TEMPLATE = `patient_chiffre;datum;sitzungstyp;dauer_min;honorar_eur;notizen
+AB-001;15.03.2024;Probatorik;50;33.57;
+AB-001;22.03.2024;Einzelsitzung;50;45.80;Erste reguläre Sitzung
+AB-002;01.04.2024;Probatorik;50;33.57;`
+
+const SUPERVISION_TEMPLATE = `supervisor_name;datum;typ;dauer_min;kosten_eur;notizen;patient_chiffres
+Dr. Müller;10.03.2024;Einzel;45;110.00;;AB-001
+Dr. Müller;17.03.2024;Gruppe;90;0;;AB-001,AB-002`
+
+function downloadTemplate(type: ImportType) {
+  const BOM = '﻿'
+  const content = type === 'sessions' ? SESSION_TEMPLATE : SUPERVISION_TEMPLATE
+  const blob = new Blob([BOM + content], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `piano_vorlage_${type === 'sessions' ? 'sitzungen' : 'supervisionen'}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings | null>(null)
@@ -9,6 +32,12 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
+
+  // Import state
+  const [importType, setImportType] = useState<ImportType>('sessions')
+  const [importLoading, setImportLoading] = useState(false)
+  const [importResult, setImportResult] = useState<{ imported: number; errors: string[] } | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Password change state
   const [currentPw, setCurrentPw] = useState('')
@@ -66,6 +95,24 @@ export default function SettingsPage() {
       setPwError(err.message)
     } finally {
       setPwLoading(false)
+    }
+  }
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImportLoading(true)
+    setImportResult(null)
+    try {
+      const result = importType === 'sessions'
+        ? await importApi.sessions(file)
+        : await importApi.supervisions(file)
+      setImportResult(result)
+    } catch (err: any) {
+      setImportResult({ imported: 0, errors: [err.message] })
+    } finally {
+      setImportLoading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
 
@@ -341,6 +388,123 @@ export default function SettingsPage() {
           )}
         </button>
       </form>
+
+      {/* CSV Import */}
+      <div className="card space-y-4">
+        <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900">
+          <Upload size={18} className="text-blue-500" />
+          Daten importieren (CSV)
+        </h2>
+        <p className="text-xs text-slate-500">
+          Lade vergangene Sitzungen oder Supervisionen aus einer CSV-Datei. Neue Patienten und Supervisoren werden automatisch angelegt.
+        </p>
+
+        {/* Type selector */}
+        <div className="flex rounded-lg border border-slate-200 overflow-hidden">
+          {(['sessions', 'supervisions'] as ImportType[]).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => { setImportType(t); setImportResult(null) }}
+              className={`flex-1 py-2 text-sm font-medium transition-colors ${importType === t ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+            >
+              {t === 'sessions' ? 'Sitzungen' : 'Supervisionen'}
+            </button>
+          ))}
+        </div>
+
+        {/* Template download */}
+        <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-lg text-sm">
+          <Download size={14} className="text-slate-400 flex-shrink-0" />
+          <span className="text-slate-600 flex-1">Vorlage herunterladen:</span>
+          <button type="button" onClick={() => downloadTemplate(importType)} className="btn-secondary text-xs py-1 px-3">
+            Vorlage CSV
+          </button>
+        </div>
+
+        {/* Format hint */}
+        <div className="text-xs text-slate-500 bg-slate-50 rounded-lg p-3 font-mono leading-relaxed overflow-x-auto">
+          {importType === 'sessions'
+            ? 'patient_chiffre;datum;sitzungstyp;dauer_min;honorar_eur;notizen'
+            : 'supervisor_name;datum;typ;dauer_min;kosten_eur;notizen;patient_chiffres'}
+        </div>
+
+        {/* File upload */}
+        <div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv"
+            className="hidden"
+            onChange={handleImport}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importLoading}
+            className="btn-primary w-full justify-center"
+          >
+            {importLoading ? (
+              <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+            ) : (
+              <><Upload size={16} /> CSV-Datei auswählen & importieren</>
+            )}
+          </button>
+        </div>
+
+        {/* Result */}
+        {importResult && (
+          <div className={`p-3 rounded-lg text-sm ${importResult.imported > 0 ? 'bg-emerald-50 border border-emerald-200' : 'bg-red-50 border border-red-200'}`}>
+            {importResult.imported > 0 && (
+              <div className="text-emerald-700 font-medium mb-1">
+                ✓ {importResult.imported} Einträge erfolgreich importiert
+              </div>
+            )}
+            {importResult.errors.length > 0 && (
+              <div className="text-red-700">
+                <div className="font-medium mb-1">{importResult.errors.length} Fehler:</div>
+                <ul className="list-disc list-inside space-y-0.5 text-xs">
+                  {importResult.errors.map((e, i) => <li key={i}>{e}</li>)}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Password reset instructions */}
+      <div className="card space-y-4">
+        <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900">
+          <AlertTriangle size={18} className="text-amber-500" />
+          Passwort vergessen?
+        </h2>
+        <p className="text-sm text-slate-600">
+          Falls du keinen Zugang mehr hast, kannst du das Passwort über die NAS-Konsole zurücksetzen:
+        </p>
+        <ol className="text-sm text-slate-700 space-y-2 list-decimal list-inside">
+          <li>
+            Per SSH mit dem NAS verbinden:
+            <div className="mt-1 font-mono text-xs bg-slate-100 rounded px-3 py-2 text-slate-800">
+              ssh Louis@192.168.178.98
+            </div>
+          </li>
+          <li>
+            Reset-Datei im Piano-Datenverzeichnis erstellen:
+            <div className="mt-1 font-mono text-xs bg-slate-100 rounded px-3 py-2 text-slate-800">
+              echo "NeuesPasswort" {'>'} /pfad/zu/piano/data/RESET_PASSWORD
+            </div>
+          </li>
+          <li>
+            Container neu starten:
+            <div className="mt-1 font-mono text-xs bg-slate-100 rounded px-3 py-2 text-slate-800">
+              docker compose restart
+            </div>
+          </li>
+        </ol>
+        <p className="text-xs text-slate-500">
+          Das Passwort wird beim Start automatisch gesetzt und die Datei gelöscht. Das Datenverzeichnis findest du mit: <span className="font-mono bg-slate-100 px-1 rounded">docker inspect piano-app | grep Source</span>
+        </p>
+      </div>
 
       {/* Password change */}
       <div className="card space-y-4">
