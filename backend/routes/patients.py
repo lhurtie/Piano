@@ -1,6 +1,7 @@
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from database import get_db
 from auth import get_current_user
@@ -68,7 +69,18 @@ def update_patient(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    patient = crud.update_patient(db, patient_id, data)
+    if data.chiffre is not None:
+        existing = db.query(PatientModel).filter(
+            PatientModel.chiffre == data.chiffre,
+            PatientModel.id != patient_id,
+        ).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Chiffre bereits vergeben")
+    try:
+        patient = crud.update_patient(db, patient_id, data)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Chiffre bereits vergeben")
     if not patient:
         raise HTTPException(status_code=404, detail="Patient nicht gefunden")
     return patient_to_out(patient, db)

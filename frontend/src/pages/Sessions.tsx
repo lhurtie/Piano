@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
-import { Plus, Trash2, Search, Edit2, FileText, Archive, X, SlidersHorizontal } from 'lucide-react'
-import { sessionsApi, patientsApi, settingsApi, exportApi } from '../api'
+import { useState, useEffect, useRef } from 'react'
+import { Plus, Trash2, Search, Edit2, FileText, Archive, X, SlidersHorizontal, Upload } from 'lucide-react'
+import { sessionsApi, patientsApi, settingsApi, exportApi, importApi } from '../api'
 import type { Session, Patient, Settings } from '../types'
 import { addRipple, delay } from '../utils/juice'
 
@@ -9,6 +9,24 @@ const PHASE_COLORS: Record<string, string> = {
   'KZT1': 'badge-blue',
   'KZT2': 'badge-purple',
   'LZT': 'badge-green',
+}
+
+function downloadSampleCsv() {
+  const BOM = '﻿'
+  const header = 'patient_chiffre;datum;sitzungstyp;dauer_min;honorar_eur;notizen'
+  const rows = [
+    'AB01;01.01.2025;Probatorik;50;33,57;Erstkontakt',
+    'AB01;08.01.2025;Einzelsitzung;50;45,80;',
+    'CD02;15.01.2025;Probatorik;50;33,57;',
+  ]
+  const csv = BOM + [header, ...rows].join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'piano_sitzungen_vorlage.csv'
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 function downloadFilteredCsv(sessions: Session[]) {
@@ -313,6 +331,9 @@ export default function Sessions() {
   const [newSessionId, setNewSessionId] = useState<number | null>(null)
   const [collapsingId, setCollapsingId] = useState<number | null>(null)
   const [exportingPdf, setExportingPdf] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState<{ imported: number; errors: string[] } | null>(null)
+  const importFileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     Promise.all([
@@ -349,6 +370,25 @@ export default function Sessions() {
     setDeleteSession(null)
   }
 
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImporting(true)
+    try {
+      const result = await importApi.sessions(file)
+      setImportResult(result)
+      if (result.imported > 0) {
+        const updated = await sessionsApi.list()
+        setSessions(updated)
+      }
+    } catch (err: any) {
+      setImportResult({ imported: 0, errors: [err.message] })
+    } finally {
+      setImporting(false)
+      if (importFileRef.current) importFileRef.current.value = ''
+    }
+  }
+
   return (
     <div className="space-y-5 pb-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -375,6 +415,28 @@ export default function Sessions() {
           >
             <Archive size={14} /> CSV{hasDateFilter ? ` (${filtered.length})` : ''}
           </button>
+          <button
+            onClick={downloadSampleCsv}
+            className="btn-secondary btn-juice ripple-container text-sm gap-1.5"
+            title="Vorlage-CSV herunterladen"
+          >
+            <Archive size={14} /> Vorlage
+          </button>
+          <button
+            onClick={() => importFileRef.current?.click()}
+            disabled={importing}
+            className="btn-secondary btn-juice ripple-container text-sm gap-1.5"
+            title="CSV importieren"
+          >
+            <Upload size={14} /> {importing ? '...' : 'Import'}
+          </button>
+          <input
+            ref={importFileRef}
+            type="file"
+            accept=".csv"
+            className="hidden"
+            onChange={handleImport}
+          />
           <button
             onClick={(e) => { addRipple(e); setShowModal(true) }}
             className="btn-primary btn-juice ripple-container"
@@ -552,6 +614,32 @@ export default function Sessions() {
           onClose={() => setDeleteSession(null)}
           onDeleted={handleDeleted}
         />
+      )}
+
+      {importResult && (
+        <div className="modal-overlay" onClick={() => setImportResult(null)}>
+          <div className="modal-content max-w-sm" onClick={(e) => e.stopPropagation()}>
+            <div className="p-6">
+              <h2 className="mb-4">{importResult.imported > 0 ? 'Import erfolgreich' : 'Import fehlgeschlagen'}</h2>
+              {importResult.imported > 0 && (
+                <p className="text-sm text-green-700 mb-3">
+                  {importResult.imported} Sitzung{importResult.imported !== 1 ? 'en' : ''} importiert.
+                </p>
+              )}
+              {importResult.errors.length > 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 max-h-48 overflow-y-auto">
+                  <p className="text-xs font-semibold text-red-700 mb-1">Fehler:</p>
+                  {importResult.errors.map((e, i) => (
+                    <p key={i} className="text-xs text-red-600">{e}</p>
+                  ))}
+                </div>
+              )}
+              <button onClick={() => setImportResult(null)} className="btn-primary w-full justify-center">
+                Schließen
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

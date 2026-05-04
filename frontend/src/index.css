@@ -84,12 +84,15 @@
   }
 }
 
-/* Prevent date/time inputs from overflowing their container on iOS */
+/* Prevent date/time inputs from overflowing their container on iOS/Safari */
 input[type="date"],
 input[type="time"] {
   min-width: 0;
   max-width: 100%;
+  width: 100%;
   box-sizing: border-box;
+  text-align: left;
+  -webkit-text-align: left;
 }
 
 /* Modal overlay */

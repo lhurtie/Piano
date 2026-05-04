@@ -5,11 +5,10 @@ services:
       - "4444:8080"
     volumes:
       - piano_data:/app/data
-      - piano_backups:/backups
+      - /volume1/docker/Piano/Backups:/backups
     restart: unless-stopped
     environment:
       - PYTHONUNBUFFERED=1
 
 volumes:
   piano_data:
-  piano_backups:
